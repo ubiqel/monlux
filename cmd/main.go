@@ -7,6 +7,7 @@ import (
 
 	"github.com/ubiqel/shine/internal/i2c"
 	"github.com/ubiqel/shine/internal/lock"
+	"github.com/ubiqel/shine/internal/version"
 	"golang.org/x/sys/unix"
 )
 
@@ -24,7 +25,7 @@ func main() {
 	case "--help", "-h":
 		printUsage(os.Stdout)
 	case "--version", "-v":
-		// TODO: add version logic
+		fmt.Println(version.Current())
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command '%s'.\n\n", args[0])
 		printUsage(os.Stderr)
@@ -36,7 +37,7 @@ const commandList = "list"
 
 // TODO: add flags for configuring retries (like in ddcutil)
 // TODO: add flag for disabling cache (enabled by default)
-// TODO: should pb add roles mapping to 'list' command (and we can by default show only mapped monitors; with flag -a search for all)
+// TODO: remove roles and config.ini; use id of display (drm connection or edid identity)
 func printUsage(output io.Writer) {
 	fmt.Fprintf(output,
 		`Control external monitor brightness over DDC/CI.
