@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/ubiqel/shine/internal/i2c"
+	"github.com/ubiqel/shine/internal/lock"
 	"golang.org/x/sys/unix"
 )
 
@@ -20,8 +21,10 @@ func main() {
 	switch args[0] {
 	case commandList:
 		runList(args[1:])
-	case "help", "--help", "-h":
+	case "--help", "-h":
 		printUsage(os.Stdout)
+	case "--version", "-v":
+		// TODO: add version logic
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command '%s'.\n\n", args[0])
 		printUsage(os.Stderr)
@@ -31,6 +34,9 @@ func main() {
 
 const commandList = "list"
 
+// TODO: add flags for configuring retries (like in ddcutil)
+// TODO: add flag for disabling cache (enabled by default)
+// TODO: should pb add roles mapping to 'list' command (and we can by default show only mapped monitors; with flag -a search for all)
 func printUsage(output io.Writer) {
 	fmt.Fprintf(output,
 		`Control external monitor brightness over DDC/CI.
@@ -58,17 +64,19 @@ Flags:
 }
 
 func runList(args []string) {
-	// TODO: lock via flock
+	lck, err := lock.Acquire()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to acquire lock: %s", err)
+		os.Exit(1)
+	}
+	defer lock.Release(lck)
 
-	// TODO: scan monitors
 	monitors := scanMonitors()
-	fmt.Println(monitors)
 
-	// TODO: read brightness for each monitor
 	for _, m := range monitors {
 		fd, err := openBus(m.Bus)
 		if err != nil {
-			// TODO: think on proper logging
+			// TODO: think on proper logging (warning here)
 			fmt.Printf("%s\tbus %d\t?\n", m.Identity, m.Bus)
 			continue
 		}
@@ -80,7 +88,6 @@ func runList(args []string) {
 		} else {
 			fmt.Printf("%s\tbus %d\t?\n", m.Identity, m.Bus)
 		}
-
 	}
 }
 
@@ -91,6 +98,8 @@ type BusInfo struct {
 
 func scanMonitors() []BusInfo {
 	var results []BusInfo
+	// TODO: we need to properly get all i2c buses by walking directory instead
+	// of this wrongful approach.
 	for bus := range 64 {
 		fd, err := openBus(bus)
 		if err != nil {
