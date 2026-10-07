@@ -66,13 +66,13 @@ func main() {
 						Required:  true,
 					},
 				},
-				Action: nil,
+				Action: runGetCmd,
 			},
 		},
 	}
 
 	if err := cmd.Run(ctx, os.Args); err != nil {
-		slog.Error("Execution failed", "error", err)
+		slog.Error("Execution failed.", "error", err)
 	}
 }
 

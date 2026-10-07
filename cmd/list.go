@@ -20,7 +20,7 @@ import (
 func runListCmd(ctx context.Context, cmd *cli.Command) error {
 	lck, err := lock.Acquire()
 	if err != nil {
-		return fmt.Errorf("Failed to acquire lock: %w\n", err)
+		return fmt.Errorf("acquiring lock: %w\n", err)
 	}
 	defer lock.Release(lck)
 
@@ -35,6 +35,7 @@ func runListCmd(ctx context.Context, cmd *cli.Command) error {
 	}
 	var rows []row
 
+	// get brightness
 	for _, m := range monitors {
 		r := row{
 			drm:  *m.DRMConnector,
@@ -120,6 +121,8 @@ type DRMConnector struct {
 }
 
 func scanMonitors() []Monitor {
+	// TODO: cache
+
 	// Discover connected DRM connectors first. Their status and (when
 	// available) DDC/I2C mapping tell us which buses are worth probing, so we
 	// avoid touching buses whose connectors are disconnected. Reads on those
