@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+tasks:
+  deps:
+    desc: Verify, tidy and install dependencies.
+    cmds:
+      - go mod verify
+      - go mod tidy
+      - go mod vendor
+
+  format:
+    desc: Run formatters on code.
+    cmds:
+      - gofumpt --extra -w ./
+
+  lint:
+    desc: Lints go code.
+    cmds:
+      - golangci-lint run ./...
+
+  test:
+    desc: Runs tests with the race detector.
+    cmds:
+      - go test -race ./...
+
+  build.debug:
+    desc: Build the debug version of binary.
+    cmds:
+      - go build -gcflags="all=-N -l" -o ./build/shine ./cmd/*.go

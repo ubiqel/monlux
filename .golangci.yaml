@@ -1,0 +1,79 @@
+version: "2"
+
+run:
+  go: '1.27'
+  timeout: 3m
+  modules-download-mode: vendor
+  tests: true
+
+linters:
+  default: all
+  disable:
+    # complexity
+    - cyclop
+    - gocognit
+    - gocyclo
+    - maintidx
+    - nestif
+
+    # module
+    - depguard
+
+    # style
+    - exhaustruct
+    - exhaustruct_v5
+    - dupl
+    - noinlineerr
+    - ireturn
+    - testpackage
+    - varnamelen
+    - wsl
+    - wsl_v5
+    - gochecknoglobals
+
+    # other
+    - godox
+    - tagliatelle
+    - mnd
+    - gomodguard
+
+  settings:
+    funlen:
+      lines: 140
+      statements: -1
+    nakedret:
+      max-func-lines: 30
+    govet:
+      enable-all: true
+      disable:
+      - fieldalignment
+      - shadow
+    lll:
+      line-length: 140
+      tab-width: 1
+
+  exclusions:
+    rules:
+    - text: 'package-comments: should have a package comment'
+      linters:
+        - revive
+    - text: 'package-comments: should have a package comment'
+      path: main.go
+      linters:
+        - forbidigo
+    - text: 'Error return value of `.*\.Close` is not checked'
+      linters:
+        - errcheck
+    - text: 'exported: .+'
+      linters:
+        - revive
+    - path: _test\.go
+      linters:
+        - gosec
+        - goconst
+        - forcetypeassert
+        - goerr113
+        - wrapcheck
+        - errchkjson
+        - funlen
+        - noctx

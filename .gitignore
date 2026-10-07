@@ -1,55 +1,27 @@
-# Prerequisites
-*.d
-
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
+# Binaries for programs and plugins
+*.exe
+*.exe~
 *.dll
 *.so
-*.so.*
 *.dylib
 
-# Executables
-*.exe
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles and other test artifacts
 *.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+coverage.*
+!coverage.go
+*.coverprofile
+profile.cov
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+# Go workspace file
+go.work
+go.work.sum
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+# env file
+.env
 
-# debug information files
-*.dwo
+# Editor/IDE
+.idea/
+.vscode/

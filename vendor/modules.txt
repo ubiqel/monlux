@@ -1,0 +1,6 @@
+# github.com/matryer/is v1.4.1
+## explicit; go 1.14
+github.com/matryer/is
+# golang.org/x/sys v0.48.0
+## explicit; go 1.26.0
+golang.org/x/sys/unix
