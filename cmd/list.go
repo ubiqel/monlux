@@ -17,17 +17,15 @@ import (
 
 func runList(args []string) {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
-
 	var verbose bool
 	fs.BoolVar(&verbose, "verbose", false, "show extended output")
-
 	var help bool
 	fs.BoolVar(&help, "help", false, "show this help and exit")
 
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: shine list [options]\n\n")
-		fmt.Fprintln(os.Stderr, "List monitors and their brightness.\n\n")
-		fmt.Fprintln(os.Stderr, "Flags:\n")
+		fmt.Fprint(os.Stderr, "Usage: shine list [options]\n\n")
+		fmt.Fprint(os.Stderr, "List monitors and their brightness.\n\n")
+		fmt.Fprint(os.Stderr, "Flags:\n")
 		fs.PrintDefaults()
 	}
 
@@ -139,24 +137,25 @@ type DRMConnector struct {
 }
 
 func scanMonitors() []Monitor {
-	// Discover all /dev/i2c-*.
-	busesPaths, _ := filepath.Glob("/dev/i2c-*")
+	// Discover connected DRM connectors first. Their status and (when
+	// available) DDC/I2C mapping tell us which buses are worth probing, so we
+	// avoid touching buses whose connectors are disconnected. Reads on those
+	// can block for hundreds of milliseconds waiting on an absent monitor.
+	connectors, err := findDRMConnectors()
+	if err != nil {
+		// TODO: log
+		connectors = nil
+	}
 
-	buses := make([]int, 0, len(busesPaths))
-	for _, busPath := range busesPaths {
-		num, ok := busFromPath(busPath)
-		if !ok {
-			// TODO: log
-			continue
-		}
-
-		buses = append(buses, num)
+	buses := candidateBuses(connectors)
+	if len(buses) == 0 {
+		// Without usable DRM information, fall back to probing every bus.
+		buses = allI2CBuses()
 	}
 	slices.Sort(buses)
 
-	// Probe EDID for each bus.
+	// Probe EDID for each candidate bus.
 	monitors := make([]Monitor, 0, len(buses))
-
 	for _, bus := range buses {
 		fd, err := openBus(bus)
 		if err != nil {
@@ -184,10 +183,7 @@ func scanMonitors() []Monitor {
 		})
 	}
 
-	// Discover connected DRM connectors.
-	connectors, err := findDRMConnectors()
-	if err != nil {
-		// TODO: log
+	if len(connectors) == 0 {
 		return monitors
 	}
 
@@ -218,7 +214,7 @@ func scanMonitors() []Monitor {
 		matches := 0
 
 		for _, connector := range connectors {
-			if len(connector.EDID) == 0 {
+			if len(connector.EDID) < 128 { // to avoid panic
 				continue
 			}
 
@@ -245,9 +241,84 @@ func scanMonitors() []Monitor {
 	return monitors
 }
 
-func findDRMConnectors() ([]DRMConnector, error) {
-	const drmPath = "/sys/class/drm"
+// candidateBuses returns the I2C buses worth probing for a DDC monitor.
+//
+// A connector with an explicit "ddc" symlink names its bus directly. Some
+// drivers (notably NVIDIA) do not expose that link, so as a fallback we take
+// every I2C adapter belonging to a GPU that has a connected connector. This
+// keeps us from probing GPUs with no attached display, whose DDC buses can
+// block for hundreds of milliseconds waiting on an absent monitor.
+func candidateBuses(connectors []DRMConnector) []int {
+	set := make(map[int]struct{})
 
+	for _, connector := range connectors {
+		if connector.Bus != nil {
+			set[*connector.Bus] = struct{}{}
+		}
+
+		for _, bus := range gpuI2CBuses(connector.Name) {
+			set[bus] = struct{}{}
+		}
+	}
+
+	buses := make([]int, 0, len(set))
+	for bus := range set {
+		buses = append(buses, bus)
+	}
+
+	return buses
+}
+
+// gpuI2CBuses returns the I2C adapters attached to the GPU that owns the
+// given DRM connector.
+func gpuI2CBuses(connectorName string) []int {
+	devicePath := filepath.Join(drmPath, connectorName, "device")
+
+	cardPath, err := filepath.EvalSymlinks(devicePath)
+	if err != nil {
+		return nil
+	}
+
+	// cardPath is ".../<gpu device>/drm/cardN", so the GPU device that owns
+	// the I2C adapters is two levels up.
+	gpuPath := filepath.Dir(filepath.Dir(cardPath))
+
+	matches, err := filepath.Glob(filepath.Join(gpuPath, "i2c-*"))
+	if err != nil {
+		return nil
+	}
+
+	buses := make([]int, 0, len(matches))
+	for _, match := range matches {
+		if bus, ok := busFromPath(match); ok {
+			buses = append(buses, bus)
+		}
+	}
+
+	return buses
+}
+
+// allI2CBuses returns every /dev/i2c-* bus.
+func allI2CBuses() []int {
+	busPaths, _ := filepath.Glob("/dev/i2c-*")
+
+	buses := make([]int, 0, len(busPaths))
+	for _, busPath := range busPaths {
+		num, ok := busFromPath(busPath)
+		if !ok {
+			// TODO: log
+			continue
+		}
+
+		buses = append(buses, num)
+	}
+
+	return buses
+}
+
+const drmPath = "/sys/class/drm"
+
+func findDRMConnectors() ([]DRMConnector, error) {
 	entries, err := os.ReadDir(drmPath)
 	if err != nil {
 		return nil, err

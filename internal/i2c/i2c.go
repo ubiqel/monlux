@@ -1,6 +1,7 @@
 package i2c
 
 import (
+	"errors"
 	"fmt"
 	"structs"
 	"time"
@@ -90,14 +91,29 @@ type VcpValue struct {
 	kind    uint8
 }
 
+// ErrUnsupportedFeature is returned when a monitor explicitly reports that a
+// VCP feature is not supported. Retrying cannot change that answer.
+var ErrUnsupportedFeature = errors.New("VCP feature not supported")
+
+// errVCPError is returned when a monitor reports a VCP error other than
+// "unsupported feature".
+var errVCPError = errors.New("VCP error")
+
 func getVcp(fd int, code byte) (val VcpValue, err error) {
-	for range VCP_RETRIES {
+	for attempt := range VCP_RETRIES {
 		val, err = getVcpOnce(fd, code)
 		if err == nil {
 			return val, nil
 		}
 
-		time.Sleep(VCP_RETRY_DELAY)
+		if errors.Is(err, ErrUnsupportedFeature) {
+			return VcpValue{}, err
+		}
+
+		// No point sleeping once the final attempt has been made.
+		if attempt < VCP_RETRIES-1 {
+			time.Sleep(VCP_RETRY_DELAY)
+		}
 	}
 
 	return VcpValue{}, err
@@ -123,16 +139,23 @@ func getVcpOnce(fd int, code byte) (val VcpValue, err error) {
 		},
 	}
 	if e := i2cRdwr(fd, msgs[:]); e != nil {
-		return VcpValue{}, fmt.Errorf("i2c_rdwr: %w", err)
+		return VcpValue{}, fmt.Errorf("i2c_rdwr: %w", e)
 	}
 
 	if checksumRead(reply[:10]) != reply[10] {
 		return VcpValue{}, fmt.Errorf("invalid checksum")
-		// return VcpValue{}, .EIO
 	}
-	if reply[2] != 0x02 || reply[3] != 0x00 || reply[4] != code { // get reply, ok, right code
-		return VcpValue{}, fmt.Errorf("invalid something")
-		// return VcpValue{}, .EIO
+	if reply[2] != 0x02 || reply[4] != code { // get reply, right code
+		return VcpValue{}, fmt.Errorf("invalid reply")
+	}
+	// reply[3] is the DDC/CI result code: 0x00 means no error while 0x01 means
+	// the requested VCP feature is unsupported. The latter is a definitive
+	// answer, so it must not be retried.
+	if reply[3] == 0x01 {
+		return VcpValue{}, fmt.Errorf("%w: 0x%02X", ErrUnsupportedFeature, code)
+	}
+	if reply[3] != 0x00 {
+		return VcpValue{}, fmt.Errorf("%w: 0x%02X", errVCPError, reply[3])
 	}
 
 	val.kind = reply[5]
