@@ -2,8 +2,9 @@ package main
 
 import (
 	"bytes"
-	"flag"
+	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,36 +13,14 @@ import (
 
 	"github.com/ubiqel/shine/internal/i2c"
 	"github.com/ubiqel/shine/internal/lock"
+	"github.com/urfave/cli/v3"
 	"golang.org/x/sys/unix"
 )
 
-func runList(args []string) {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
-	var verbose bool
-	fs.BoolVar(&verbose, "verbose", false, "show extended output")
-	var help bool
-	fs.BoolVar(&help, "help", false, "show this help and exit")
-
-	fs.Usage = func() {
-		fmt.Fprint(os.Stderr, "Usage: shine list [options]\n\n")
-		fmt.Fprint(os.Stderr, "List monitors and their brightness.\n\n")
-		fmt.Fprint(os.Stderr, "Flags:\n")
-		fs.PrintDefaults()
-	}
-
-	if err := fs.Parse(args); err != nil {
-		os.Exit(2)
-	}
-
-	if help {
-		fs.Usage()
-		return
-	}
-
+func runListCmd(ctx context.Context, cmd *cli.Command) error {
 	lck, err := lock.Acquire()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to acquire lock: %s\n", err)
-		os.Exit(1)
+		return fmt.Errorf("Failed to acquire lock: %w\n", err)
 	}
 	defer lock.Release(lck)
 
@@ -66,9 +45,10 @@ func runList(args []string) {
 
 		fd, err := openBus(m.I2CBus)
 		if err != nil {
-			// TODO: think on proper logging (warning here)
+			slog.Warn("Failed to open fd for I2C bus", "bus", m.I2CBus)
 			r.brightness = "?"
 			rows = append(rows, r)
+
 			continue
 		}
 		pct, _, _, err := i2c.ReadBrightness(fd)
@@ -81,7 +61,7 @@ func runList(args []string) {
 		rows = append(rows, r)
 	}
 
-	if verbose {
+	if cmd.Bool(verboseFlag) {
 		for i, r := range rows {
 			if i > 0 {
 				fmt.Println()
@@ -92,7 +72,8 @@ func runList(args []string) {
 			fmt.Printf("   Brightness:    %s\n", r.brightness)
 			fmt.Printf("   EDID:          %s\n", r.edid)
 		}
-		return
+
+		return nil
 	}
 
 	// Compact table output with dynamic column widths
@@ -121,6 +102,8 @@ func runList(args []string) {
 			colWidths[1], r.brightness,
 			r.edid)
 	}
+
+	return nil
 }
 
 type Monitor struct {
@@ -143,7 +126,7 @@ func scanMonitors() []Monitor {
 	// can block for hundreds of milliseconds waiting on an absent monitor.
 	connectors, err := findDRMConnectors()
 	if err != nil {
-		// TODO: log
+		slog.Debug("Failed to find DRM connectors.", "error", err)
 		connectors = nil
 	}
 
@@ -159,20 +142,23 @@ func scanMonitors() []Monitor {
 	for _, bus := range buses {
 		fd, err := openBus(bus)
 		if err != nil {
-			// TODO: log
+			slog.Debug("Failed to open fd for I2C bus.", "error", err, "bus", bus)
+
 			continue
 		}
 
 		edid, err := i2c.ReadEdid(fd)
 		unix.Close(fd)
 		if err != nil {
-			// TODO: log
+			slog.Debug("Failed to read EDID from I2C bus.", "error", err, "bus", bus)
+
 			continue
 		}
 
 		identity, ok := i2c.ParseIdentity(edid[:])
 		if !ok {
-			// TODO: log
+			slog.Debug("Failed to parse identity from EDID.", "bus", bus)
+
 			continue
 		}
 
@@ -292,6 +278,8 @@ func gpuI2CBuses(connectorName string) []int {
 	for _, match := range matches {
 		if bus, ok := busFromPath(match); ok {
 			buses = append(buses, bus)
+		} else {
+			slog.Debug("Couldn't get I2C bus from path", "path", match)
 		}
 	}
 
@@ -306,7 +294,8 @@ func allI2CBuses() []int {
 	for _, busPath := range busPaths {
 		num, ok := busFromPath(busPath)
 		if !ok {
-			// TODO: log
+			slog.Debug("Couldn't get I2C bus from path", "path", busPath)
+
 			continue
 		}
 
@@ -355,6 +344,8 @@ func findDRMConnectors() ([]DRMConnector, error) {
 		if err == nil {
 			if bus, ok := busFromPath(target); ok {
 				connector.Bus = &bus
+			} else {
+				slog.Debug("Couldn't get I2C bus from path", "path", target)
 			}
 		}
 
