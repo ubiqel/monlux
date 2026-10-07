@@ -18,10 +18,10 @@ import (
 const verboseFlag = "verbose"
 
 // TODO: add description to <display> argument
-// TODO: add get command
 // TODO: add up command
 // TODO: add down command
 // TODO: add set command
+// TODO: add cycle command (with --reverse flag)
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/ubiqel/shine/internal/i2c"
@@ -363,23 +362,4 @@ func findDRMConnectors() ([]DRMConnector, error) {
 	}
 
 	return connectors, nil
-}
-
-func busFromPath(path string) (int, bool) {
-	name := filepath.Base(path)
-
-	if !strings.HasPrefix(name, "i2c-") {
-		return 0, false
-	}
-
-	num, err := strconv.Atoi(strings.TrimPrefix(name, "i2c-"))
-	if err != nil {
-		return 0, false
-	}
-
-	return num, true
-}
-
-func openBus(bus int) (fd int, err error) {
-	return unix.Open(fmt.Sprintf("/dev/i2c-%d", bus), unix.O_RDWR, 0)
 }

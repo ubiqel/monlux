@@ -2,11 +2,7 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log/slog"
-	"strconv"
-	"strings"
 
 	"github.com/ubiqel/shine/internal/i2c"
 	"github.com/ubiqel/shine/internal/lock"
@@ -20,44 +16,9 @@ func runGetCmd(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer lock.Release(lck)
 
-	displayId, displayIDType, err := parseDisplayID(cmd.StringArg("display"))
+	bus, err := resolveDisplayBus(cmd.StringArg("display"))
 	if err != nil {
-		return fmt.Errorf("parsing DISPLAY argument: %w", err)
-	}
-
-	monitors := scanMonitors()
-	var bus int
-	var found bool
-Loop:
-	for _, m := range monitors {
-		switch displayIDType {
-		case idTypeDRM:
-			if m.DRMConnector == nil || *m.DRMConnector != displayId {
-				continue
-			}
-		case idTypeEDID:
-			if m.EDIDIdentity != displayId {
-				continue
-			}
-		case idTypeI2C:
-			// in this branch we just check that bus exists.
-			if strconv.Itoa(m.I2CBus) != displayId {
-				continue
-			}
-		default:
-			// should be unrecheable.
-			slog.Debug("Reached unrecheable branch in switch statement.")
-
-			continue
-		}
-
-		found = true
-		bus = m.I2CBus
-
-		break Loop
-	}
-	if !found {
-		return fmt.Errorf("monitor not found")
+		return err
 	}
 
 	fd, err := openBus(bus)
@@ -72,30 +33,4 @@ Loop:
 	fmt.Printf("%d\n", pct)
 
 	return nil
-}
-
-const (
-	idTypeDRM  = "drm"
-	idTypeEDID = "edid"
-	idTypeI2C  = "i2c"
-)
-
-func parseDisplayID(input string) (id string, tp string, err error) {
-	if input == "" {
-		return "", "", errors.New("missing display argument")
-	}
-
-	parts := strings.SplitN(strings.TrimSpace(input), ":", 2)
-	if len(parts) == 1 {
-		return parts[0], idTypeDRM, nil
-	}
-
-	tp = parts[0]
-	id = parts[1]
-	switch tp {
-	case idTypeDRM, idTypeEDID, idTypeI2C:
-		return id, tp, nil
-	default:
-		return "", "", fmt.Errorf("unknown display id type '%s'", tp)
-	}
 }
