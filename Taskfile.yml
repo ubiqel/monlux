@@ -16,21 +16,21 @@ tasks:
       - gofumpt --extra -w ./
 
   lint:
-    desc: Lints go code.
+    desc: Lint Go code.
     cmds:
       - golangci-lint run ./...
 
   test:
-    desc: Runs tests with the race detector.
+    desc: Run tests with the race detector.
     cmds:
       - go test -race ./...
 
   run:
-    desc: Compiles and runs current version of program
+    desc: Compile and run current version of program.
     cmds:
       - go run ./cmd/*.go {{ .CLI_ARGS }}
 
   build.debug:
-    desc: Build the debug version of binary.
+    desc: Build debug version of binary.
     cmds:
       - go build -gcflags="all=-N -l" -o ./build/shine ./cmd/*.go
