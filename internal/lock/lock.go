@@ -8,44 +8,35 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type Lock struct {
-	fd int
-}
-
 func Acquire() (Lock, error) {
-	dir := runtimeDir()
-	err := os.MkdirAll(dir, 0o700)
+	path := filepath.Join(os.TempDir(), "shine.lock")
+	fd, err := unix.Open(path, unix.O_CREAT|unix.O_RDONLY|unix.O_CLOEXEC, 0o666)
 	if err != nil {
-		return Lock{}, fmt.Errorf("creating directory path '%s' for lock: %w", dir, err)
-	}
-	path := filepath.Join(dir, "shine.lock")
-
-	fd, err := unix.Open(path, unix.O_CREAT|unix.O_RDWR, unix.S_IRUSR|unix.S_IWUSR)
-	if err != nil {
-		return Lock{}, fmt.Errorf("openning fd '%s' for lock: %w", path, err)
+		return 0, fmt.Errorf("openning fd '%s' for lock: %w", path, err)
 	}
 
 	err = unix.Flock(fd, unix.LOCK_EX)
 	if err != nil {
-		return Lock{}, fmt.Errorf("acquiring lock with flock: %w", err)
+		_ = unix.Close(fd)
+		return 0, fmt.Errorf("acquiring lock with flock: %w", err)
 	}
 
-	return Lock{fd: fd}, nil
+	return 0, nil
 }
 
-func Release(lock Lock) error {
-	err := unix.Close(lock.fd)
-	if err != nil {
+type Lock int
+
+func (l *Lock) Release() error {
+	if l == nil || int(*l) < 0 {
+		return nil
+	}
+
+	fd := int(*l)
+	*l = -1 // Mark as released.
+
+	if err := unix.Close(fd); err != nil {
 		return fmt.Errorf("closing lock's fd: %w", err)
 	}
 
 	return nil
-}
-
-func runtimeDir() string {
-	base, ok := os.LookupEnv("XDG_RUNTIME_DIR")
-	if !ok {
-		return "/tmp/shine"
-	}
-	return filepath.Join(base, "shine")
 }

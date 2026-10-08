@@ -14,7 +14,7 @@ func runGetCmd(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return fmt.Errorf("acquiring lock: %w\n", err)
 	}
-	defer lock.Release(lck)
+	defer lck.Release()
 
 	bus, err := resolveDisplayBus(cmd.StringArg("display"))
 	if err != nil {

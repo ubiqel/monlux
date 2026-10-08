@@ -21,7 +21,7 @@ func runListCmd(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return fmt.Errorf("acquiring lock: %w\n", err)
 	}
-	defer lock.Release(lck)
+	defer lck.Release()
 
 	monitors := scanMonitors()
 
