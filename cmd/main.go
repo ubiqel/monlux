@@ -2,20 +2,21 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/signal"
 	"runtime/debug"
-	"strings"
 	"syscall"
 
+	"github.com/ubiqel/shine/internal/log"
 	"github.com/ubiqel/shine/internal/version"
 	"github.com/urfave/cli/v3"
 )
 
-const verboseFlag = "verbose"
+const (
+	verboseFlag = "verbose"
+	debugFlag   = "debug"
+)
 
 // TODO: add description to <display> argument
 // TODO: add up command
@@ -27,9 +28,9 @@ func main() {
 	defer cancel()
 	defer handlePanic()
 
-	logHandler := &CliHandler{
-		out:  os.Stderr,
-		opts: slog.HandlerOptions{Level: slog.LevelInfo},
+	logHandler := &log.CliHandler{
+		Out:  os.Stderr,
+		Opts: slog.HandlerOptions{Level: slog.LevelInfo},
 	}
 	slog.SetDefault(slog.New(logHandler))
 
@@ -40,6 +41,25 @@ func main() {
 		Version:                version.Current().String(),
 		UseShortOptionHandling: true,
 		HideHelpCommand:        true,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  debugFlag,
+				Usage: "Show debug information.",
+				Action: func(ctx context.Context, c *cli.Command, debug bool) error {
+					if !debug {
+						return nil
+					}
+
+					logHandler := &log.CliHandler{
+						Out:  os.Stderr,
+						Opts: slog.HandlerOptions{Level: slog.LevelDebug},
+					}
+					slog.SetDefault(slog.New(logHandler))
+
+					return nil
+				},
+			},
+		},
 		Commands: []*cli.Command{
 			{
 				Name:            "list",
@@ -61,9 +81,8 @@ func main() {
 				ArgsUsage:       "DISPLAY",
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:      "display",
-						UsageText: "Identificator of display. Can be DRM connection, EDID identificator, I2C bus.",
-						Required:  true,
+						Name:     "display",
+						Required: true,
 					},
 				},
 				Action: runGetCmd,
@@ -82,39 +101,6 @@ func handlePanic() {
 		os.Exit(1)
 	}
 }
-
-type CliHandler struct {
-	out  io.Writer
-	opts slog.HandlerOptions
-}
-
-func (h *CliHandler) Enabled(_ context.Context, l slog.Level) bool {
-	return l >= h.opts.Level.Level()
-}
-
-func (h *CliHandler) Handle(_ context.Context, r slog.Record) error {
-	// 1. Format level tag
-	levelStr := fmt.Sprintf("[%s]", r.Level.String())
-
-	// 2. Format timestamp only if in DEBUG mode
-	var timeStr string
-	if h.opts.Level.Level() <= slog.LevelDebug {
-		timeStr = r.Time.Format("15:04:05.000 ")
-	}
-
-	// 3. Print clean human output: "14:23:01.123 [DEBUG] Message key=value"
-	var attrs strings.Builder
-	r.Attrs(func(a slog.Attr) bool {
-		attrs.WriteString(fmt.Sprintf(" %s=%v", a.Key, a.Value))
-		return true
-	})
-
-	_, err := fmt.Fprintf(h.out, "%s%s %s%s\n", timeStr, levelStr, r.Message, attrs.String())
-	return err
-}
-
-func (h *CliHandler) WithAttrs(attrs []slog.Attr) slog.Handler { return h }
-func (h *CliHandler) WithGroup(name string) slog.Handler       { return h }
 
 // TODO: remove later
 
