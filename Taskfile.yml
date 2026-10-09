@@ -25,10 +25,10 @@ tasks:
     cmds:
       - go test -race ./...
 
-  run:
-    desc: Compile and run current version of program.
+  run.debug:
+    desc: Compile and run current version of program with debug flag.
     cmds:
-      - go run ./cmd/*.go {{ .CLI_ARGS }}
+      - go run ./cmd/*.go --debug {{ .CLI_ARGS }}
 
   build.debug:
     desc: Build debug version of binary.

@@ -75,13 +75,64 @@ func ReadBrightness(fd int) (percent int, raw, maximum uint16, err error) {
 	}
 	if val.maximum == 0 {
 		return 0, 0, 0, fmt.Errorf("io error")
-		// return 0, 0, 0, .EIO
 	}
 
 	return int(val.current) * 100 / int(val.maximum),
 		val.current,
 		val.maximum,
 		nil
+}
+
+func SetBrightness(fd int, value uint16) error {
+	return setVcp(fd, VCP_BRIGHTNESS, value)
+}
+
+func setVcp(fd int, code byte, value uint16) error {
+	var err error
+	for attempt := range VCP_RETRIES {
+		err = setVcpOnce(fd, code, value)
+		if err == nil {
+			return nil
+		}
+
+		// No point sleeping once the final attempt has been made.
+		if attempt < VCP_RETRIES-1 {
+			time.Sleep(VCP_RETRY_DELAY)
+		}
+	}
+
+	return err
+}
+
+func setVcpOnce(fd int, code byte, value uint16) error {
+	req := [7]byte{0x51, 0x84, 0x03, code, byte(value >> 8), byte(value), 0}
+	req[6] = checksumWrite(req[:6])
+
+	var reply [6]byte
+	msgs := [2]I2CMsg{
+		{Addr: DDC_ADDR, Flags: 0, Len: 7, Buf: &req[0]},
+		{Addr: DDC_ADDR, Flags: I2C_M_RD, Len: 6, Buf: &reply[0]},
+	}
+	if err := i2cRdwr(fd, msgs[:]); err != nil {
+		return err
+	}
+
+	// Set replies vary between monitors: parse the DDC/CI length byte rather
+	// than assuming a fixed frame. Some firmwares ACK with a zero-length
+	// message (no opcode), others echo opcode 0x04 and a result.
+	data_len := int(reply[1] & 0x7F)
+	total := 2 + data_len + 1 // source + length + data + checksum
+	if total > len(reply) {
+		return errors.New("io error") // TODO: create global var for error
+	}
+	if checksumRead(reply[:total-1]) != reply[total-1] {
+		return errors.New("io error")
+	}
+	if data_len >= 1 && reply[2] != 0x04 { // Set VCP reply opcode
+		return errors.New("io error")
+	}
+
+	return nil
 }
 
 type VcpValue struct {

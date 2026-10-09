@@ -36,6 +36,7 @@ linters:
     - tagliatelle
     - mnd
     - gomodguard
+    - err113
 
   settings:
     funlen:

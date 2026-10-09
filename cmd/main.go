@@ -86,6 +86,22 @@ func main() {
 					},
 				},
 				Action: runGetCmd,
+			}, {
+				Name:            "set",
+				Usage:           "Set brightness of a monitor as a percentage.",
+				HideHelpCommand: true,
+				ArgsUsage:       "DISPLAY <0-100>",
+				Arguments: []cli.Argument{
+					&cli.StringArg{
+						Name:     "display",
+						Required: true,
+					},
+					&cli.Uint32Arg{
+						Name:     "percent",
+						Required: true,
+					},
+				},
+				Action: runSetCmd,
 			},
 		},
 	}

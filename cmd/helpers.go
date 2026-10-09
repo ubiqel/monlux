@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -98,4 +99,14 @@ func busFromPath(path string) (int, bool) {
 
 func openBus(bus int) (fd int, err error) {
 	return unix.Open(fmt.Sprintf("/dev/i2c-%d", bus), unix.O_RDWR, 0)
+}
+
+func clamp[T cmp.Ordered](value, minimum, maximum T) T {
+	if value < minimum {
+		return minimum
+	}
+	if value > maximum {
+		return maximum
+	}
+	return value
 }
