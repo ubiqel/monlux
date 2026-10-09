@@ -31,9 +31,9 @@ func runSetCmd(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("reading brightness from i2c bus '%v': %w", bus, err)
 	}
 	pct := int(cmd.Uint32Arg("percent"))
-	val := uint16(int(maximum) * clamp(pct, 0, 100) / 100)
+	rawVal := uint16(int(maximum) * clamp(pct, 0, 100) / 100)
 
-	if err := i2c.SetBrightness(fd, val); err != nil {
+	if err := i2c.SetBrightness(fd, rawVal); err != nil {
 		return fmt.Errorf("setting new brightness value via i2c bus '%v': %w", bus, err)
 	}
 
