@@ -11,6 +11,8 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+const cliName = "shine"
+
 const debugFlag = "debug"
 
 func main() {
@@ -20,12 +22,40 @@ func main() {
 	}
 	slog.SetDefault(slog.New(logHandler))
 
+	// Set by Before when --debug is given, and called by After.
+	stopProfiling := func() {}
+
 	cmd := &cli.Command{
-		Name:                   "shine",
+		Name:                   cliName,
 		Usage:                  "Control external monitor brightness over DDC/CI.",
 		Version:                version.Current().String(),
 		UseShortOptionHandling: true,
 		HideHelpCommand:        true,
+		Before: func(ctx context.Context, c *cli.Command) (context.Context, error) {
+			if !c.Bool(debugFlag) {
+				return ctx, nil
+			}
+
+			// Name the profiles after the subcommand, but only if it's a real
+			// one, so user input never ends up in a file name.
+			name := cliName
+			if sub := c.Args().First(); c.Command(sub) != nil {
+				name = sub
+			}
+
+			stop, err := startProfiling(name)
+			if err != nil {
+				return ctx, fmt.Errorf("starting profiling: %w", err)
+			}
+			stopProfiling = stop
+
+			return ctx, nil
+		},
+		After: func(ctx context.Context, c *cli.Command) error {
+			stopProfiling()
+
+			return nil
+		},
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  debugFlag,
