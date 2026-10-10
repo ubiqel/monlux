@@ -51,14 +51,12 @@ func main() {
 				Aliases:         []string{"ls"},
 				Usage:           "List detected monitors and their brightness",
 				HideHelpCommand: true,
-				Flags: []cli.Flag{
-					&cli.BoolFlag{
-						Name:    verboseFlag,
-						Aliases: []string{"v"},
-						Usage:   "Show extended output.",
-					},
-				},
-				Action: runListCmd,
+				Action:          runListCmd,
+			}, {
+				Name:            "detect",
+				Usage:           "Explain what was found on each I2C bus and why",
+				HideHelpCommand: true,
+				Action:          runDetectCmd,
 			}, {
 				Name:            "get",
 				Usage:           "Print brightness of a monitor as a percentage",

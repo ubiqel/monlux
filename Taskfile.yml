@@ -23,7 +23,7 @@ tasks:
   test:
     desc: Run tests with the race detector.
     cmds:
-      - go test -race ./...
+      - gotestsum --  -race ./...
 
   run.debug:
     desc: Compile and run current version of program with debug flag.
