@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/ubiqel/shine/internal/i2c"
 	"github.com/ubiqel/shine/internal/lock"
@@ -34,34 +35,47 @@ func runListCmd(ctx context.Context, cmd *cli.Command) error {
 		edid       string
 		bus        int
 	}
-	var rows []row
 
-	// get brightness
-	for _, m := range monitors {
-		r := row{
-			drm:  *m.DRMConnector,
-			i2c:  fmt.Sprintf("/dev/i2c-%d", m.I2CBus),
-			edid: m.EDIDIdentity,
-			bus:  m.I2CBus,
-		}
+	// TODO: don't like all this shit. refactor
+	//
+	// We make parallel requests here to get the brightness, but they may still
+	// end up sequential (lock inside driver). For example, it happens on
+	// Nvidia card with two monitors connected. On my machine sequential and
+	// parallel implementation perform the same so i've kept parallel version.
+	wg := sync.WaitGroup{}
+	rows := make([]row, len(monitors))
+	for i, m := range monitors {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-		fd, err := openBus(m.I2CBus)
-		if err != nil {
-			slog.Warn("Failed to open fd for I2C bus", "bus", m.I2CBus)
-			r.brightness = "?"
-			rows = append(rows, r)
+			r := row{
+				drm:  *m.DRMConnector,
+				i2c:  fmt.Sprintf("/dev/i2c-%d", m.I2CBus),
+				edid: m.EDIDIdentity,
+				bus:  m.I2CBus,
+			}
 
-			continue
-		}
-		pct, _, _, err := i2c.ReadBrightness(fd)
-		unix.Close(fd)
-		if err == nil {
-			r.brightness = fmt.Sprintf("%d%%", pct)
-		} else {
-			r.brightness = "?"
-		}
-		rows = append(rows, r)
+			fd, err := openBus(m.I2CBus)
+			if err != nil {
+				slog.Warn("Failed to open fd for I2C bus", "bus", m.I2CBus)
+				r.brightness = "?"
+				rows[i] = r
+
+				return
+			}
+
+			pct, _, _, err := i2c.ReadBrightness(fd)
+			unix.Close(fd)
+			if err == nil {
+				r.brightness = fmt.Sprintf("%d%%", pct)
+			} else {
+				r.brightness = "?"
+			}
+			rows[i] = r
+		}()
 	}
+	wg.Wait()
 
 	if cmd.Bool(verboseFlag) {
 		for i, r := range rows {
@@ -71,24 +85,24 @@ func runListCmd(ctx context.Context, cmd *cli.Command) error {
 			fmt.Printf("Display %d\n", i+1)
 			fmt.Printf("   I2C bus:       %s\n", r.i2c)
 			fmt.Printf("   DRM connector: %s\n", r.drm)
-			fmt.Printf("   Brightness:    %s\n", r.brightness)
 			fmt.Printf("   EDID:          %s\n", r.edid)
+			fmt.Printf("   Brightness:    %s\n", r.brightness)
 		}
 
 		return nil
 	}
 
 	// Compact table output with dynamic column widths
-	headers := []string{"DRM", "BRIGHTNESS", "EDID"}
+	headers := []string{"DRM", "EDID", "BRIGHTNESS"}
 	colWidths := []int{len(headers[0]), len(headers[1]), len(headers[2])}
 	for _, r := range rows {
 		if w := len(r.drm); w > colWidths[0] {
 			colWidths[0] = w
 		}
-		if w := len(r.brightness); w > colWidths[1] {
+		if w := len(r.edid); w > colWidths[1] {
 			colWidths[1] = w
 		}
-		if w := len(r.edid); w > colWidths[2] {
+		if w := len(r.brightness); w > colWidths[2] {
 			colWidths[2] = w
 		}
 	}
@@ -101,8 +115,7 @@ func runListCmd(ctx context.Context, cmd *cli.Command) error {
 	for _, r := range rows {
 		fmt.Printf("%-*s  %-*s  %s\n",
 			colWidths[0], r.drm,
-			colWidths[1], r.brightness,
-			r.edid)
+			colWidths[1], r.edid, r.brightness)
 	}
 
 	return nil

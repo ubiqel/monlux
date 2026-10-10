@@ -96,9 +96,11 @@ func setVcp(fd int, code byte, value uint16) error {
 		if err == nil {
 			return nil
 		}
+		slog.Debug("SetVCP request failed", "error", err, "vcp_code", code)
 
 		// No point sleeping once the final attempt has been made.
 		if attempt < VCP_RETRIES-1 {
+			slog.Debug("SetVCP sleep before next retry")
 			time.Sleep(VCP_RETRY_DELAY)
 		}
 	}
@@ -159,12 +161,15 @@ func getVcp(fd int, code byte) (val VcpValue, err error) {
 			return val, nil
 		}
 
+		slog.Debug("GetVCP request failed", "error", err, "vcp_code", code)
+
 		if errors.Is(err, ErrUnsupportedFeature) {
 			return VcpValue{}, err
 		}
 
 		// No point sleeping once the final attempt has been made.
 		if attempt < VCP_RETRIES-1 {
+			slog.Debug("GetVCP sleep before next retry")
 			time.Sleep(VCP_RETRY_DELAY)
 		}
 	}
