@@ -84,6 +84,14 @@ func ReadBrightness(fd int) (percent int, raw, maximum uint16, err error) { // T
 		nil
 }
 
+// ProbeDDC reports whether the monitor answers DDC/CI on this bus. A monitor
+// that rejects only the brightness feature still answers DDC/CI, so it counts.
+func ProbeDDC(fd int) bool {
+	_, err := getVcp(fd, VCP_BRIGHTNESS)
+
+	return err == nil || errors.Is(err, ErrUnsupportedFeature)
+}
+
 func SetBrightness(fd int, value uint16) error {
 	slog.Debug("Setting new brightness value via i2c", "value", value)
 	return setVcp(fd, VCP_BRIGHTNESS, value)

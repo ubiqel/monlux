@@ -28,7 +28,7 @@ tasks:
   run.debug:
     desc: Compile and run current version of program with debug flag.
     cmds:
-      - go run ./cmd/*.go --debug {{ .CLI_ARGS }}
+      - go run ./cmd --debug {{ .CLI_ARGS }}
 
   build.debug:
     desc: Build debug version of binary.

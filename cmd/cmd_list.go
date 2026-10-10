@@ -132,12 +132,22 @@ type DRMConnector struct {
 	Name string
 	Bus  *int
 	EDID []byte
+	// Connected is the connector's sysfs status. It's only meaningful when
+	// StatusReliable is true.
+	Connected      bool
+	StatusReliable bool
+}
+
+// mayBeConnected reports whether a monitor could be attached to the connector.
+// Connectors whose status can't be trusted are always considered.
+func (c DRMConnector) mayBeConnected() bool {
+	return c.Connected || !c.StatusReliable
 }
 
 func scanMonitors() []Monitor {
 	// TODO: cache
 
-	// Discover connected DRM connectors first. Their status and (when
+	// Discover DRM connectors first. Their status (when trusted) and (when
 	// available) DDC/I2C mapping tell us which buses are worth probing, so we
 	// avoid touching buses whose connectors are disconnected. Reads on those
 	// can block for hundreds of milliseconds waiting on an absent monitor.
@@ -187,14 +197,14 @@ func scanMonitors() []Monitor {
 	}
 
 	if len(connectors) == 0 {
-		return monitors
+		return filterDDCMonitors(monitors)
 	}
 
 	// First, associate connectors through the kernel's direct
 	// connector -> DDC/I2C mapping.
 	for i := range monitors {
 		for _, connector := range connectors {
-			if connector.Bus == nil {
+			if !connector.mayBeConnected() || connector.Bus == nil {
 				continue
 			}
 
@@ -217,6 +227,10 @@ func scanMonitors() []Monitor {
 		matches := 0
 
 		for _, connector := range connectors {
+			if !connector.mayBeConnected() {
+				continue
+			}
+
 			if len(connector.EDID) < 128 { // to avoid panic
 				continue
 			}
@@ -241,7 +255,7 @@ func scanMonitors() []Monitor {
 		// >1 matches: ambiguous, so leave it unknown.
 	}
 
-	return monitors
+	return filterDDCMonitors(monitors)
 }
 
 // candidateBuses returns the I2C buses worth probing for a DDC monitor.
@@ -255,6 +269,10 @@ func candidateBuses(connectors []DRMConnector) []int {
 	set := make(map[int]struct{})
 
 	for _, connector := range connectors {
+		if !connector.mayBeConnected() {
+			continue
+		}
+
 		if connector.Bus != nil {
 			set[*connector.Bus] = struct{}{}
 		}
@@ -275,16 +293,10 @@ func candidateBuses(connectors []DRMConnector) []int {
 // gpuI2CBuses returns the I2C adapters attached to the GPU that owns the
 // given DRM connector.
 func gpuI2CBuses(connectorName string) []int {
-	devicePath := filepath.Join(drmPath, connectorName, "device")
-
-	cardPath, err := filepath.EvalSymlinks(devicePath)
+	gpuPath, err := gpuDevicePath(connectorName)
 	if err != nil {
 		return nil
 	}
-
-	// cardPath is ".../<gpu device>/drm/cardN", so the GPU device that owns
-	// the I2C adapters is two levels up.
-	gpuPath := filepath.Dir(filepath.Dir(cardPath))
 
 	matches, err := filepath.Glob(filepath.Join(gpuPath, "i2c-*"))
 	if err != nil {
@@ -294,6 +306,10 @@ func gpuI2CBuses(connectorName string) []int {
 	buses := make([]int, 0, len(matches))
 	for _, match := range matches {
 		if bus, ok := busFromPath(match); ok {
+			if isSMBusAdapter(bus) {
+				continue
+			}
+
 			buses = append(buses, bus)
 		} else {
 			slog.Debug("Couldn't get I2C bus from path", "path", match)
@@ -316,6 +332,10 @@ func allI2CBuses() []int {
 			continue
 		}
 
+		if isSMBusAdapter(num) {
+			continue
+		}
+
 		buses = append(buses, num)
 	}
 
@@ -323,6 +343,90 @@ func allI2CBuses() []int {
 }
 
 const drmPath = "/sys/class/drm"
+
+// isInternalPanel reports whether a connector is a laptop's built-in panel.
+// Panels expose EDID over I2C but never answer DDC/CI.
+func isInternalPanel(connectorName string) bool {
+	return strings.Contains(connectorName, "-eDP-") || strings.Contains(connectorName, "-LVDS-")
+}
+
+// gpuDevicePath returns the PCI device of the GPU that owns a DRM connector.
+func gpuDevicePath(connectorName string) (string, error) {
+	devicePath := filepath.Join(drmPath, connectorName, "device")
+
+	cardPath, err := filepath.EvalSymlinks(devicePath)
+	if err != nil {
+		return "", fmt.Errorf("resolving %s: %w", devicePath, err)
+	}
+
+	// cardPath is ".../<gpu device>/drm/cardN", so the GPU device is two
+	// levels up.
+	return filepath.Dir(filepath.Dir(cardPath)), nil
+}
+
+// connectorDriver returns the kernel driver bound to the GPU that owns the
+// connector (e.g. "amdgpu" or "nvidia"), or "" if it can't be determined.
+func connectorDriver(connectorName string) string {
+	gpuPath, err := gpuDevicePath(connectorName)
+	if err != nil {
+		return ""
+	}
+
+	target, err := filepath.EvalSymlinks(filepath.Join(gpuPath, "driver"))
+	if err != nil {
+		return ""
+	}
+
+	return filepath.Base(target)
+}
+
+// isSMBusAdapter reports whether an I2C bus is an SMBus adapter. SMBus is not
+// used for DDC/CI, so these buses are never worth probing.
+func isSMBusAdapter(bus int) bool {
+	name, err := os.ReadFile(fmt.Sprintf("/sys/bus/i2c/devices/i2c-%d/name", bus))
+	if err != nil {
+		return false
+	}
+
+	return strings.Contains(strings.ToLower(string(name)), "smbus")
+}
+
+// filterDDCMonitors keeps only monitors that answer DDC/CI. EDID alone isn't
+// enough: laptop panels answer EDID but not DDC/CI.
+func filterDDCMonitors(monitors []Monitor) []Monitor {
+	result := monitors[:0]
+	for _, m := range monitors {
+		if supportsDDC(m) {
+			result = append(result, m)
+		}
+	}
+
+	return result
+}
+
+func supportsDDC(m Monitor) bool {
+	if m.DRMConnector != nil && isInternalPanel(*m.DRMConnector) {
+		slog.Debug("Skipping internal panel, it doesn't support DDC/CI.", "connector", *m.DRMConnector)
+
+		return false
+	}
+
+	fd, err := openBus(m.I2CBus)
+	if err != nil {
+		slog.Debug("Failed to open fd for I2C bus.", "error", err, "bus", m.I2CBus)
+
+		return false
+	}
+	defer unix.Close(fd)
+
+	if !i2c.ProbeDDC(fd) {
+		slog.Debug("Bus answers EDID but not DDC/CI.", "bus", m.I2CBus)
+
+		return false
+	}
+
+	return true
+}
 
 func findDRMConnectors() ([]DRMConnector, error) {
 	entries, err := os.ReadDir(drmPath)
@@ -334,7 +438,9 @@ func findDRMConnectors() ([]DRMConnector, error) {
 	for _, entry := range entries {
 		name := entry.Name()
 
-		if !strings.HasPrefix(name, "card") {
+		// Connectors are named like "card1-DP-3". The bare "card1" entry is
+		// the GPU itself.
+		if !strings.HasPrefix(name, "card") || !strings.Contains(name, "-") {
 			continue
 		}
 
@@ -346,12 +452,12 @@ func findDRMConnectors() ([]DRMConnector, error) {
 			continue
 		}
 
-		if strings.TrimSpace(string(status)) != "connected" {
-			continue
-		}
-
 		connector := DRMConnector{
-			Name: name,
+			Name:      name,
+			Connected: strings.TrimSpace(string(status)) == "connected",
+			// NVIDIA's proprietary driver sometimes reports "disconnected",
+			// so its status is ignored.
+			StatusReliable: connectorDriver(name) != "nvidia",
 		}
 
 		// First try the kernel's direct connector -> I2C mapping.
