@@ -37,7 +37,7 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  debugFlag,
-				Usage: "Show debug information.",
+				Usage: "show debug information during command execution",
 				Action: func(ctx context.Context, c *cli.Command, debug bool) error {
 					if !debug {
 						return nil
@@ -57,7 +57,7 @@ func main() {
 			{
 				Name:            "list",
 				Aliases:         []string{"ls"},
-				Usage:           "List detected monitors and their brightness.",
+				Usage:           "List detected monitors and their brightness",
 				HideHelpCommand: true,
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
@@ -69,7 +69,7 @@ func main() {
 				Action: runListCmd,
 			}, {
 				Name:            "get",
-				Usage:           "Print brightness of a monitor as a percentage.",
+				Usage:           "Print brightness of a monitor as a percentage",
 				HideHelpCommand: true,
 				ArgsUsage:       "DISPLAY",
 				Arguments: []cli.Argument{
@@ -81,7 +81,7 @@ func main() {
 				Action: runGetCmd,
 			}, {
 				Name:            "set",
-				Usage:           "Set brightness of a monitor as a percentage.",
+				Usage:           "Set brightness of a monitor as a percentage",
 				HideHelpCommand: true,
 				ArgsUsage:       "DISPLAY PERCENT",
 				Arguments: []cli.Argument{
@@ -97,7 +97,7 @@ func main() {
 				Action: runSetCmd,
 			}, {
 				Name:            "up",
-				Usage:           "Increase brightness by step.",
+				Usage:           "Increase brightness by step",
 				HideHelpCommand: true,
 				ArgsUsage:       "DISPLAY STEP",
 				Arguments: []cli.Argument{
@@ -113,7 +113,7 @@ func main() {
 				Action: runUpCmd,
 			}, {
 				Name:            "down",
-				Usage:           "Decrease brightness by step.",
+				Usage:           "Decrease brightness by step",
 				HideHelpCommand: true,
 				ArgsUsage:       "DISPLAY STEP",
 				Arguments: []cli.Argument{
