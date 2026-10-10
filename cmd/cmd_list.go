@@ -16,6 +16,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const verboseFlag = "verbose"
+
 func runListCmd(ctx context.Context, cmd *cli.Command) error {
 	lck, err := lock.Acquire()
 	if err != nil {

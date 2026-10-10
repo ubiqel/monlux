@@ -5,23 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/ubiqel/shine/internal/log"
 	"github.com/ubiqel/shine/internal/version"
 	"github.com/urfave/cli/v3"
 )
 
-const (
-	debugFlag   = "debug"
-	verboseFlag = "verbose"
-)
+const debugFlag = "debug"
 
 func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
 	logHandler := &log.CliHandler{
 		Out:  os.Stderr,
 		Opts: slog.HandlerOptions{Level: slog.LevelInfo},
@@ -74,7 +66,7 @@ func main() {
 				ArgsUsage:       "DISPLAY",
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     "display",
+						Name:     "DISPLAY",
 						Required: true,
 					},
 				},
@@ -86,11 +78,11 @@ func main() {
 				ArgsUsage:       "DISPLAY PERCENT",
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     "display",
+						Name:     "DISPLAY",
 						Required: true,
 					},
-					&cli.Uint32Arg{
-						Name:     "percent",
+					&cli.UintArg{
+						Name:     "PERCENT",
 						Required: true,
 					},
 				},
@@ -102,11 +94,11 @@ func main() {
 				ArgsUsage:       "DISPLAY STEP",
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     "display",
+						Name:     "DISPLAY",
 						Required: true,
 					},
-					&cli.Uint32Arg{
-						Name:     "step",
+					&cli.UintArg{
+						Name:     "STEP",
 						Required: true,
 					},
 				},
@@ -118,20 +110,39 @@ func main() {
 				ArgsUsage:       "DISPLAY STEP",
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     "display",
+						Name:     "DISPLAY",
 						Required: true,
 					},
-					&cli.Uint32Arg{
-						Name:     "step",
+					&cli.UintArg{
+						Name:     "STEP",
 						Required: true,
 					},
 				},
 				Action: runDownCmd,
+			}, {
+				Name:            "cycle",
+				Usage:           "Cycle predefined steps",
+				HideHelpCommand: true,
+				ArgsUsage:       "DISPLAY",
+				Arguments: []cli.Argument{
+					&cli.StringArg{
+						Name:     "DISPLAY",
+						Required: true,
+					},
+				},
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "steps",
+						Usage: "brightness steps to cycle through",
+						Value: "0,50,100",
+					},
+				},
+				Action: runCycleCmd,
 			},
 		},
 	}
 
-	if err := cmd.Run(ctx, os.Args); err != nil {
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s", err)
 	}
 }

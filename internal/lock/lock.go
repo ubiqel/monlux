@@ -8,6 +8,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+type Lock int
+
 func Acquire() (Lock, error) {
 	path := filepath.Join(os.TempDir(), "shine.lock")
 	fd, err := unix.Open(path, unix.O_CREAT|unix.O_RDONLY|unix.O_CLOEXEC, 0o666)
@@ -21,10 +23,8 @@ func Acquire() (Lock, error) {
 		return 0, fmt.Errorf("acquiring lock with flock: %w", err)
 	}
 
-	return 0, nil
+	return Lock(fd), nil
 }
-
-type Lock int
 
 func (l *Lock) Release() error {
 	if l == nil || int(*l) < 0 {

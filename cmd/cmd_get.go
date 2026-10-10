@@ -16,7 +16,7 @@ func runGetCmd(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer lck.Release()
 
-	bus, err := resolveDisplayBus(cmd.StringArg("display"))
+	bus, err := resolveDisplayBus(cmd.StringArg("DISPLAY"))
 	if err != nil {
 		return err
 	}

@@ -16,7 +16,7 @@ func runSetCmd(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer lck.Release()
 
-	bus, err := resolveDisplayBus(cmd.StringArg("display"))
+	bus, err := resolveDisplayBus(cmd.StringArg("DISPLAY"))
 	if err != nil {
 		return err
 	}
@@ -30,7 +30,7 @@ func runSetCmd(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return fmt.Errorf("reading brightness from i2c bus '%v': %w", bus, err)
 	}
-	pct := int(cmd.Uint32Arg("percent"))
+	pct := int(cmd.UintArg("PERCENT"))
 	rawVal := uint16(int(maximum) * clamp(pct, 0, 100) / 100)
 
 	if err := i2c.SetBrightness(fd, rawVal); err != nil {

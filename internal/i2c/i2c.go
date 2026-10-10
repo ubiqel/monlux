@@ -3,6 +3,7 @@ package i2c
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"structs"
 	"time"
 	"unsafe"
@@ -68,7 +69,7 @@ func ReadEdid(fd int) ([128]byte, error) {
 }
 
 // Brightness as a percentage (0-100), plus the raw values for callers that set.
-func ReadBrightness(fd int) (percent int, raw, maximum uint16, err error) {
+func ReadBrightness(fd int) (percent int, raw, maximum uint16, err error) { // TODO: i don't like this func. refactor.
 	val, e := getVcp(fd, VCP_BRIGHTNESS)
 	if e != nil {
 		return 0, 0, 0, fmt.Errorf("get_vcp: %w", e)
@@ -84,6 +85,7 @@ func ReadBrightness(fd int) (percent int, raw, maximum uint16, err error) {
 }
 
 func SetBrightness(fd int, value uint16) error {
+	slog.Debug("Setting new brightness value via i2c", "value", value)
 	return setVcp(fd, VCP_BRIGHTNESS, value)
 }
 
