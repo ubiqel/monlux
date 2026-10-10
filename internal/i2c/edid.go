@@ -5,6 +5,13 @@ import (
 	"strings"
 )
 
+// ParseIdentity builds a "MFG:name:serial" identity from the EDID base block.
+//
+// Some monitors omit the name or serial descriptors. The name then falls back
+// to the product code (hex) and the serial to the numeric serial, or to the
+// product code when that is zero. Identical models without descriptors can
+// therefore produce the same identity; callers should treat duplicates as
+// ambiguous.
 func ParseIdentity(edid []byte) (identity string, ok bool) {
 	if len(edid) < 128 {
 		return "", false
@@ -51,13 +58,13 @@ func ParseIdentity(edid []byte) (identity string, ok bool) {
 	}
 
 	if name == "" {
-		name = string(fmt.Appendf(name_buf[:], "%04X", product))
+		name = string(fmt.Appendf(name_buf[:0], "%04X", product))
 	}
 	if serial == "" {
 		if serial_num != 0 {
-			serial = string(fmt.Appendf(serial_buf[:], "%d", serial_num))
+			serial = string(fmt.Appendf(serial_buf[:0], "%d", serial_num))
 		} else {
-			serial = string(fmt.Appendf(serial_buf[:], "%04X", product))
+			serial = string(fmt.Appendf(serial_buf[:0], "%04X", product))
 		}
 	}
 

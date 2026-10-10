@@ -197,7 +197,10 @@ func scanMonitors() []Monitor {
 	}
 
 	if len(connectors) == 0 {
-		return filterDDCMonitors(monitors)
+		monitors = filterDDCMonitors(monitors)
+		warnDuplicateIdentities(monitors)
+
+		return monitors
 	}
 
 	// First, associate connectors through the kernel's direct
@@ -280,8 +283,27 @@ func scanMonitors() []Monitor {
 	monitors = filterDDCMonitors(monitors)
 	resolveConnectorConflicts(monitors)
 	reportUnlinkedConnectors(monitors, connectors)
+	warnDuplicateIdentities(monitors)
 
 	return monitors
+}
+
+// warnDuplicateIdentities warns about monitors that share an identity. Such
+// monitors can't be selected by "edid:" and need "i2c:" instead.
+func warnDuplicateIdentities(monitors []Monitor) {
+	owners := make(map[string][]int)
+	for i, m := range monitors {
+		owners[m.EDIDIdentity] = append(owners[m.EDIDIdentity], i)
+	}
+
+	for identity, idx := range owners {
+		if len(idx) < 2 {
+			continue
+		}
+
+		slog.Warn("Multiple monitors share an identity, select them with 'i2c:<bus>'.",
+			"identity", identity, "buses", busesOf(monitors, idx))
+	}
 }
 
 // candidateBuses returns the I2C buses worth probing for a DDC monitor.

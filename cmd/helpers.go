@@ -25,9 +25,10 @@ func resolveDisplayBus(id string) (int, error) {
 	}
 
 	monitors := scanMonitors()
-	var bus int
-	var found bool
-Loop:
+
+	// Collect every match: an identity can be shared by several monitors, and
+	// silently picking one would send the command to the wrong display.
+	var matches []Monitor
 	for _, m := range monitors {
 		switch displayIDType {
 		case idTypeDRM:
@@ -50,16 +51,25 @@ Loop:
 			continue
 		}
 
-		found = true
-		bus = m.I2CBus
-
-		break Loop
+		matches = append(matches, m)
 	}
-	if !found {
+
+	switch len(matches) {
+	case 0:
 		return 0, errors.New("monitor not found")
-	}
+	case 1:
+		return matches[0].I2CBus, nil
+	default:
+		buses := make([]int, 0, len(matches))
+		for _, m := range matches {
+			buses = append(buses, m.I2CBus)
+		}
 
-	return bus, nil
+		return 0, fmt.Errorf(
+			"display '%s' matches %d monitors (buses %v); select one with 'i2c:<bus>'",
+			displayId, len(matches), buses,
+		)
+	}
 }
 
 func parseDisplayID(input string) (id string, tp string, err error) {

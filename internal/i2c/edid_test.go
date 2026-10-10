@@ -31,3 +31,31 @@ func TestParseIdentity(t *testing.T) {
 	is.Equal(ok, true)
 	is.Equal(identity, "GBT:M27Q P:23133B000026")
 }
+
+func TestParseIdentityFallbacks(t *testing.T) {
+	is := is.New(t)
+
+	header := []byte{0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00}
+
+	// No name or serial descriptors: name falls back to product code (hex),
+	// serial to the numeric serial.
+	var withSerial [128]byte
+	copy(withSerial[:8], header)
+	withSerial[8], withSerial[9] = 0x1C, 0x54   // GBT
+	withSerial[10], withSerial[11] = 0x18, 0x27 // product 0x2718
+	withSerial[12] = 0x01                       // serial 1
+
+	identity, ok := i2c.ParseIdentity(withSerial[:])
+	is.Equal(ok, true)
+	is.Equal(identity, "GBT:2718:1")
+
+	// No serial at all: serial falls back to the product code.
+	var noSerial [128]byte
+	copy(noSerial[:8], header)
+	noSerial[8], noSerial[9] = 0x1C, 0x54
+	noSerial[10], noSerial[11] = 0x18, 0x27
+
+	identity, ok = i2c.ParseIdentity(noSerial[:])
+	is.Equal(ok, true)
+	is.Equal(identity, "GBT:2718:2718")
+}
