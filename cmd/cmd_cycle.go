@@ -7,17 +7,10 @@ import (
 	"strings"
 
 	"github.com/ubiqel/shine/internal/i2c"
-	"github.com/ubiqel/shine/internal/lock"
 	"github.com/urfave/cli/v3"
 )
 
 func runCycleCmd(ctx context.Context, cmd *cli.Command) error {
-	lck, err := lock.Acquire()
-	if err != nil {
-		return fmt.Errorf("acquiring lock: %w", err)
-	}
-	defer lck.Release()
-
 	cycleSteps, forwardCycle, err := parseCycleSteps(cmd)
 	if err != nil {
 		return fmt.Errorf("parsing \"--steps\" flag: %w", err)

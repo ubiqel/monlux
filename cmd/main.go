@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/ubiqel/shine/internal/lock"
 	"github.com/ubiqel/shine/internal/log"
 	"github.com/ubiqel/shine/internal/version"
 	"github.com/urfave/cli/v3"
@@ -22,7 +23,7 @@ func main() {
 	}
 	slog.SetDefault(slog.New(logHandler))
 
-	// Set by Before when --debug is given, and called by After.
+	var lck *lock.Lock
 	stopProfiling := func() {}
 
 	cmd := &cli.Command{
@@ -32,6 +33,12 @@ func main() {
 		UseShortOptionHandling: true,
 		HideHelpCommand:        true,
 		Before: func(ctx context.Context, c *cli.Command) (context.Context, error) {
+			l, err := lock.Acquire()
+			if err != nil {
+				return ctx, fmt.Errorf("acquiring lock: %w", err)
+			}
+			lck = &l
+
 			if !c.Bool(debugFlag) {
 				return ctx, nil
 			}
@@ -45,6 +52,9 @@ func main() {
 
 			stop, err := startProfiling(name)
 			if err != nil {
+				_ = lck.Release()
+				lck = nil
+
 				return ctx, fmt.Errorf("starting profiling: %w", err)
 			}
 			stopProfiling = stop
@@ -52,7 +62,16 @@ func main() {
 			return ctx, nil
 		},
 		After: func(ctx context.Context, c *cli.Command) error {
-			stopProfiling()
+			defer stopProfiling()
+
+			if lck == nil {
+				return nil
+			}
+
+			if err := lck.Release(); err != nil {
+				slog.Warn("Failed to release lock.", "error", err)
+			}
+			lck = nil
 
 			return nil
 		},
@@ -172,5 +191,6 @@ func main() {
 
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
+		os.Exit(1)
 	}
 }

@@ -5,17 +5,10 @@ import (
 	"fmt"
 
 	"github.com/ubiqel/shine/internal/i2c"
-	"github.com/ubiqel/shine/internal/lock"
 	"github.com/urfave/cli/v3"
 )
 
 func runDownCmd(ctx context.Context, cmd *cli.Command) error {
-	lck, err := lock.Acquire()
-	if err != nil {
-		return fmt.Errorf("acquiring lock: %w\n", err)
-	}
-	defer lck.Release()
-
 	return withDisplay(cmd.StringArg("DISPLAY"), func(fd int, bus int) error {
 		currPct, _, maximum, err := i2c.ReadBrightness(fd)
 		if err != nil {

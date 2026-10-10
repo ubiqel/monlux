@@ -7,18 +7,11 @@ import (
 	"sync"
 
 	"github.com/ubiqel/shine/internal/i2c"
-	"github.com/ubiqel/shine/internal/lock"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/sys/unix"
 )
 
 func runListCmd(ctx context.Context, cmd *cli.Command) error {
-	lck, err := lock.Acquire()
-	if err != nil {
-		return fmt.Errorf("acquiring lock: %w\n", err)
-	}
-	defer lck.Release()
-
 	monitors := scanMonitors()
 
 	type row struct {

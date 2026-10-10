@@ -4,17 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ubiqel/shine/internal/lock"
 	"github.com/urfave/cli/v3"
 )
 
 func runDetectCmd(ctx context.Context, cmd *cli.Command) error {
-	lck, err := lock.Acquire()
-	if err != nil {
-		return fmt.Errorf("acquiring lock: %w", err)
-	}
-	defer lck.Release()
-
 	res := scan()
 
 	if len(res.Buses) == 0 {
