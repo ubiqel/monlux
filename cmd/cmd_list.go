@@ -208,11 +208,31 @@ func scanMonitors() []Monitor {
 				continue
 			}
 
-			if *connector.Bus == monitors[i].I2CBus {
-				name := connector.Name
-				monitors[i].DRMConnector = &name
+			if *connector.Bus != monitors[i].I2CBus {
+				continue
+			}
+
+			// A stale or wrong direct link would attach the wrong monitor, so
+			// it's only trusted when the connector's EDID agrees.
+			if !sysfsEDIDAgrees(connector, monitors[i]) {
+				slog.Debug("Direct DDC link disagrees with connector EDID, ignoring it.",
+					"bus", monitors[i].I2CBus, "connector", connector.Name)
+
 				break
 			}
+
+			name := connector.Name
+			monitors[i].DRMConnector = &name
+
+			break
+		}
+	}
+
+	// Connectors already linked directly can't be claimed by EDID matching.
+	claimed := make(map[string]bool)
+	for _, m := range monitors {
+		if m.DRMConnector != nil {
+			claimed[*m.DRMConnector] = true
 		}
 	}
 
@@ -227,7 +247,7 @@ func scanMonitors() []Monitor {
 		matches := 0
 
 		for _, connector := range connectors {
-			if !connector.mayBeConnected() {
+			if !connector.mayBeConnected() || claimed[connector.Name] {
 				continue
 			}
 
@@ -255,7 +275,13 @@ func scanMonitors() []Monitor {
 		// >1 matches: ambiguous, so leave it unknown.
 	}
 
-	return filterDDCMonitors(monitors)
+	// Filter before resolving conflicts: a bus that doesn't answer DDC/CI
+	// (such as a phantom MST entry) must not compete for a connector.
+	monitors = filterDDCMonitors(monitors)
+	resolveConnectorConflicts(monitors)
+	reportUnlinkedConnectors(monitors, connectors)
+
+	return monitors
 }
 
 // candidateBuses returns the I2C buses worth probing for a DDC monitor.
@@ -348,6 +374,69 @@ const drmPath = "/sys/class/drm"
 // Panels expose EDID over I2C but never answer DDC/CI.
 func isInternalPanel(connectorName string) bool {
 	return strings.Contains(connectorName, "-eDP-") || strings.Contains(connectorName, "-LVDS-")
+}
+
+// sysfsEDIDAgrees reports whether a connector's sysfs EDID is consistent with
+// a monitor's EDID. An empty sysfs EDID is no evidence either way.
+func sysfsEDIDAgrees(connector DRMConnector, m Monitor) bool {
+	if len(connector.EDID) < 128 {
+		return true
+	}
+
+	return bytes.Equal(m.EDIDRaw[:], connector.EDID[:128])
+}
+
+// resolveConnectorConflicts clears the connector of any monitors that claim
+// the same one. Two identical EDIDs can't be told apart, so neither is linked.
+func resolveConnectorConflicts(monitors []Monitor) {
+	owners := make(map[string][]int)
+	for i, m := range monitors {
+		if m.DRMConnector != nil {
+			owners[*m.DRMConnector] = append(owners[*m.DRMConnector], i)
+		}
+	}
+
+	for name, idx := range owners {
+		if len(idx) < 2 {
+			continue
+		}
+
+		slog.Warn("Multiple monitors claim the same DRM connector, leaving it unlinked.",
+			"connector", name, "buses", busesOf(monitors, idx))
+
+		for _, i := range idx {
+			monitors[i].DRMConnector = nil
+		}
+	}
+}
+
+func busesOf(monitors []Monitor, idx []int) []int {
+	buses := make([]int, 0, len(idx))
+	for _, i := range idx {
+		buses = append(buses, monitors[i].I2CBus)
+	}
+
+	return buses
+}
+
+// reportUnlinkedConnectors logs connected connectors that no DDC-capable
+// monitor was linked to, for example MST monitors on NVIDIA that have a DRM
+// connector but no I2C bus.
+func reportUnlinkedConnectors(monitors []Monitor, connectors []DRMConnector) {
+	linked := make(map[string]bool)
+	for _, m := range monitors {
+		if m.DRMConnector != nil {
+			linked[*m.DRMConnector] = true
+		}
+	}
+
+	for _, c := range connectors {
+		if !c.mayBeConnected() || linked[c.Name] || isInternalPanel(c.Name) {
+			continue
+		}
+
+		slog.Debug("Connector has no DDC-capable monitor linked to it.", "connector", c.Name)
+	}
 }
 
 // gpuDevicePath returns the PCI device of the GPU that owns a DRM connector.
