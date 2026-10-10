@@ -67,9 +67,12 @@ func runListCmd(ctx context.Context, cmd *cli.Command) error {
 
 			pct, _, _, err := i2c.ReadBrightness(fd)
 			unix.Close(fd)
-			if err == nil {
+			switch _, asleep := dpmsState(m); {
+			case err == nil:
 				r.brightness = fmt.Sprintf("%d%%", pct)
-			} else {
+			case asleep:
+				r.brightness = "asleep"
+			default:
 				r.brightness = "?"
 			}
 			rows[i] = r

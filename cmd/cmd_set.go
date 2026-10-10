@@ -16,26 +16,19 @@ func runSetCmd(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer lck.Release()
 
-	bus, err := resolveDisplayBus(cmd.StringArg("DISPLAY"))
-	if err != nil {
-		return err
-	}
-	fd, err := openBus(bus)
-	if err != nil {
-		return fmt.Errorf("opening fd for bus '%v': %w", bus, err)
-	}
+	return withDisplay(cmd.StringArg("DISPLAY"), func(fd int, bus int) error {
+		// Convert percent to real value (it's possible that max is not 100).
+		_, _, maximum, err := i2c.ReadBrightness(fd)
+		if err != nil {
+			return fmt.Errorf("reading brightness from i2c bus '%v': %w", bus, err)
+		}
+		pct := int(cmd.UintArg("PERCENT"))
+		rawVal := uint16(int(maximum) * clamp(pct, 0, 100) / 100)
 
-	// Convert percent to real value (it's possible that max is not 100).
-	_, _, maximum, err := i2c.ReadBrightness(fd)
-	if err != nil {
-		return fmt.Errorf("reading brightness from i2c bus '%v': %w", bus, err)
-	}
-	pct := int(cmd.UintArg("PERCENT"))
-	rawVal := uint16(int(maximum) * clamp(pct, 0, 100) / 100)
+		if err := i2c.SetBrightness(fd, rawVal); err != nil {
+			return fmt.Errorf("setting new brightness value via i2c bus '%v': %w", bus, err)
+		}
 
-	if err := i2c.SetBrightness(fd, rawVal); err != nil {
-		return fmt.Errorf("setting new brightness value via i2c bus '%v': %w", bus, err)
-	}
-
-	return nil
+		return nil
+	})
 }

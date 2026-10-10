@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,10 +19,53 @@ const (
 	idTypeI2C  = "i2c"
 )
 
-func resolveDisplayBus(id string) (int, error) {
+// withDisplay resolves a DISPLAY argument, opens its I2C bus and runs fn with
+// the fd. The fd is always closed. If fn fails while the display is asleep, the
+// error says so, since a sleeping display is the usual reason DDC/CI fails.
+func withDisplay(id string, fn func(fd int, bus int) error) error {
+	m, err := resolveDisplay(id)
+	if err != nil {
+		return err
+	}
+
+	fd, err := openBus(m.I2CBus)
+	if err != nil {
+		return fmt.Errorf("opening fd for bus '%v': %w", m.I2CBus, err)
+	}
+	defer unix.Close(fd)
+
+	if err := fn(fd, m.I2CBus); err != nil {
+		if state, asleep := dpmsState(m); asleep {
+			return fmt.Errorf("display is asleep (DPMS %s): %w", state, err)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+// dpmsState returns the DPMS state of the monitor's DRM connector (e.g. "On",
+// "Standby", "Off") and whether it's asleep. Unknown states are not asleep.
+func dpmsState(m Monitor) (state string, asleep bool) {
+	if m.DRMConnector == nil {
+		return "", false
+	}
+
+	raw, err := os.ReadFile(filepath.Join(drmPath, *m.DRMConnector, "dpms"))
+	if err != nil {
+		return "", false
+	}
+
+	state = strings.TrimSpace(string(raw))
+
+	return state, state != "" && state != "On"
+}
+
+func resolveDisplay(id string) (Monitor, error) {
 	displayId, displayIDType, err := parseDisplayID(id)
 	if err != nil {
-		return 0, fmt.Errorf("parsing DISPLAY argument: %w", err)
+		return Monitor{}, fmt.Errorf("parsing DISPLAY argument: %w", err)
 	}
 
 	monitors := scanMonitors()
@@ -56,16 +100,16 @@ func resolveDisplayBus(id string) (int, error) {
 
 	switch len(matches) {
 	case 0:
-		return 0, errors.New("monitor not found")
+		return Monitor{}, errors.New("monitor not found")
 	case 1:
-		return matches[0].I2CBus, nil
+		return matches[0], nil
 	default:
 		buses := make([]int, 0, len(matches))
 		for _, m := range matches {
 			buses = append(buses, m.I2CBus)
 		}
 
-		return 0, fmt.Errorf(
+		return Monitor{}, fmt.Errorf(
 			"display '%s' matches %d monitors (buses %v); select one with 'i2c:<bus>'",
 			displayId, len(matches), buses,
 		)

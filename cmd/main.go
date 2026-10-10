@@ -143,6 +143,6 @@ func main() {
 	}
 
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %s", err)
+		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 	}
 }

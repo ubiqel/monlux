@@ -23,27 +23,20 @@ func runCycleCmd(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("parsing \"--steps\" flag: %w", err)
 	}
 
-	bus, err := resolveDisplayBus(cmd.StringArg("DISPLAY"))
-	if err != nil {
-		return err
-	}
-	fd, err := openBus(bus)
-	if err != nil {
-		return fmt.Errorf("opening fd for bus '%v': %w", bus, err)
-	}
+	return withDisplay(cmd.StringArg("DISPLAY"), func(fd int, bus int) error {
+		currPct, _, rawMaximum, err := i2c.ReadBrightness(fd)
+		if err != nil {
+			return fmt.Errorf("reading brightness from i2c bus '%v': %w", bus, err)
+		}
 
-	currPct, _, rawMaximum, err := i2c.ReadBrightness(fd)
-	if err != nil {
-		return fmt.Errorf("reading brightness from i2c bus '%v': %w", bus, err)
-	}
+		targetPct := findNextCycleTarget(uint(currPct), cycleSteps, forwardCycle)
+		rawTarget := uint16(uint(rawMaximum) * targetPct / 100)
+		if err := i2c.SetBrightness(fd, rawTarget); err != nil {
+			return fmt.Errorf("setting new brightness value via i2c bus '%v': %w", bus, err)
+		}
 
-	targetPct := findNextCycleTarget(uint(currPct), cycleSteps, forwardCycle)
-	rawTarget := uint16(uint(rawMaximum) * targetPct / 100)
-	if err := i2c.SetBrightness(fd, rawTarget); err != nil {
-		return fmt.Errorf("setting new brightness value via i2c bus '%v': %w", bus, err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func parseCycleSteps(cmd *cli.Command) (steps []uint, forwardCycle bool, err error) {

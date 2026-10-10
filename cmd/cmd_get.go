@@ -16,21 +16,14 @@ func runGetCmd(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer lck.Release()
 
-	bus, err := resolveDisplayBus(cmd.StringArg("DISPLAY"))
-	if err != nil {
-		return err
-	}
+	return withDisplay(cmd.StringArg("DISPLAY"), func(fd int, bus int) error {
+		pct, _, _, err := i2c.ReadBrightness(fd)
+		if err != nil {
+			return fmt.Errorf("reading brightness from i2c bus '%v': %w", bus, err)
+		}
 
-	fd, err := openBus(bus)
-	if err != nil {
-		return fmt.Errorf("opening fd for bus '%v': %w", bus, err)
-	}
-	pct, _, _, err := i2c.ReadBrightness(fd)
-	if err != nil {
-		return fmt.Errorf("reading brightness from i2c bus '%v': %w", bus, err)
-	}
+		fmt.Printf("%d\n", pct)
 
-	fmt.Printf("%d\n", pct)
-
-	return nil
+		return nil
+	})
 }
