@@ -8,6 +8,7 @@ import (
 
 	"github.com/ubiqel/shine/internal/lock"
 	"github.com/ubiqel/shine/internal/log"
+	"github.com/ubiqel/shine/internal/profile"
 	"github.com/ubiqel/shine/internal/version"
 	"github.com/urfave/cli/v3"
 )
@@ -45,12 +46,12 @@ func main() {
 
 			// Name the profiles after the subcommand, but only if it's a real
 			// one, so user input never ends up in a file name.
-			name := cliName
+			commandName := cliName
 			if sub := c.Args().First(); c.Command(sub) != nil {
-				name = sub
+				commandName = sub
 			}
 
-			stop, err := startProfiling(name)
+			stop, err := profile.StartProfiling(cliName, commandName)
 			if err != nil {
 				_ = lck.Release()
 				lck = nil

@@ -1,4 +1,4 @@
-package main
+package profile
 
 import (
 	"fmt"
@@ -10,10 +10,10 @@ import (
 	"time"
 )
 
-// startProfiling writes a CPU profile and an execution trace for one run into
+// StartProfiling writes a CPU profile and an execution trace for one run into
 // the user's cache directory, named after the subcommand and the start time.
 // The returned function stops both and reports where the files are.
-func startProfiling(name string) (stop func(), err error) {
+func StartProfiling(cliName string, commandName string) (stop func(), err error) {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return nil, fmt.Errorf("finding cache directory: %w", err)
@@ -25,8 +25,8 @@ func startProfiling(name string) (stop func(), err error) {
 	}
 
 	stamp := time.Now().Format("20060102-150405")
-	cpuPath := filepath.Join(dir, fmt.Sprintf("cpu-%s-%s.prof", name, stamp))
-	tracePath := filepath.Join(dir, fmt.Sprintf("trace-%s-%s.out", name, stamp))
+	cpuPath := filepath.Join(dir, fmt.Sprintf("cpu-%s-%s.prof", commandName, stamp))
+	tracePath := filepath.Join(dir, fmt.Sprintf("trace-%s-%s.out", commandName, stamp))
 
 	cpuFile, err := os.OpenFile(cpuPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
