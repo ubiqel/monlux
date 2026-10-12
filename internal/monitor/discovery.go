@@ -1,19 +1,12 @@
-package main
+package monitor
 
 import (
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
-)
-
-// Sysfs and device locations. They are variables so tests can point them at
-// fixture trees.
-var (
-	drmPath    = "/sys/class/drm"
-	i2cSysPath = "/sys/bus/i2c/devices"
-	devPath    = "/dev"
 )
 
 // DRMConnector is a connected or connectable output of a GPU, as seen in sysfs.
@@ -40,7 +33,7 @@ func (c DRMConnector) mayBeConnected() bool {
 // every I2C adapter belonging to a GPU that has a connected connector. This
 // keeps us from probing GPUs with no attached display, whose DDC buses can
 // block for hundreds of milliseconds waiting on an absent monitor.
-func candidateBuses(connectors []DRMConnector) []int {
+func (h Host) candidateBuses(connectors []DRMConnector) []int {
 	set := make(map[int]struct{})
 
 	for _, connector := range connectors {
@@ -52,7 +45,7 @@ func candidateBuses(connectors []DRMConnector) []int {
 			set[*connector.Bus] = struct{}{}
 		}
 
-		for _, bus := range gpuI2CBuses(connector.Name) {
+		for _, bus := range h.gpuI2CBuses(connector.Name) {
 			set[bus] = struct{}{}
 		}
 	}
@@ -67,8 +60,8 @@ func candidateBuses(connectors []DRMConnector) []int {
 
 // gpuI2CBuses returns the I2C adapters attached to the GPU that owns the
 // given DRM connector.
-func gpuI2CBuses(connectorName string) []int {
-	gpuPath, err := gpuDevicePath(connectorName)
+func (h Host) gpuI2CBuses(connectorName string) []int {
+	gpuPath, err := h.gpuDevicePath(connectorName)
 	if err != nil {
 		return nil
 	}
@@ -81,7 +74,7 @@ func gpuI2CBuses(connectorName string) []int {
 	buses := make([]int, 0, len(matches))
 	for _, match := range matches {
 		if bus, ok := busFromPath(match); ok {
-			if isSMBusAdapter(bus) {
+			if h.isSMBusAdapter(bus) {
 				continue
 			}
 
@@ -95,8 +88,8 @@ func gpuI2CBuses(connectorName string) []int {
 }
 
 // allI2CBuses returns every i2c-* bus device.
-func allI2CBuses() []int {
-	busPaths, _ := filepath.Glob(filepath.Join(devPath, "i2c-*"))
+func (h Host) allI2CBuses() []int {
+	busPaths, _ := filepath.Glob(filepath.Join(h.DevPath, "i2c-*"))
 
 	buses := make([]int, 0, len(busPaths))
 	for _, busPath := range busPaths {
@@ -107,7 +100,7 @@ func allI2CBuses() []int {
 			continue
 		}
 
-		if isSMBusAdapter(num) {
+		if h.isSMBusAdapter(num) {
 			continue
 		}
 
@@ -118,8 +111,8 @@ func allI2CBuses() []int {
 }
 
 // gpuDevicePath returns the PCI device of the GPU that owns a DRM connector.
-func gpuDevicePath(connectorName string) (string, error) {
-	devicePath := filepath.Join(drmPath, connectorName, "device")
+func (h Host) gpuDevicePath(connectorName string) (string, error) {
+	devicePath := filepath.Join(h.DRMPath, connectorName, "device")
 
 	cardPath, err := filepath.EvalSymlinks(devicePath)
 	if err != nil {
@@ -133,8 +126,8 @@ func gpuDevicePath(connectorName string) (string, error) {
 
 // connectorDriver returns the kernel driver bound to the GPU that owns the
 // connector (e.g. "amdgpu" or "nvidia"), or "" if it can't be determined.
-func connectorDriver(connectorName string) string {
-	gpuPath, err := gpuDevicePath(connectorName)
+func (h Host) connectorDriver(connectorName string) string {
+	gpuPath, err := h.gpuDevicePath(connectorName)
 	if err != nil {
 		return ""
 	}
@@ -149,8 +142,8 @@ func connectorDriver(connectorName string) string {
 
 // isSMBusAdapter reports whether an I2C bus is an SMBus adapter. SMBus is not
 // used for DDC/CI, so these buses are never worth probing.
-func isSMBusAdapter(bus int) bool {
-	name, err := os.ReadFile(filepath.Join(i2cSysPath, fmt.Sprintf("i2c-%d", bus), "name"))
+func (h Host) isSMBusAdapter(bus int) bool {
+	name, err := os.ReadFile(filepath.Join(h.I2CSysPath, fmt.Sprintf("i2c-%d", bus), "name"))
 	if err != nil {
 		return false
 	}
@@ -158,8 +151,8 @@ func isSMBusAdapter(bus int) bool {
 	return strings.Contains(strings.ToLower(string(name)), "smbus")
 }
 
-func findDRMConnectors() ([]DRMConnector, error) {
-	entries, err := os.ReadDir(drmPath)
+func (h Host) findDRMConnectors() ([]DRMConnector, error) {
+	entries, err := os.ReadDir(h.DRMPath)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +167,7 @@ func findDRMConnectors() ([]DRMConnector, error) {
 			continue
 		}
 
-		connectorPath := filepath.Join(drmPath, name)
+		connectorPath := filepath.Join(h.DRMPath, name)
 
 		// A DRM connector has a "status" attribute.
 		status, err := os.ReadFile(filepath.Join(connectorPath, "status"))
@@ -187,7 +180,7 @@ func findDRMConnectors() ([]DRMConnector, error) {
 			Connected: strings.TrimSpace(string(status)) == "connected",
 			// NVIDIA's proprietary driver sometimes reports "disconnected",
 			// so its status is ignored.
-			StatusReliable: connectorDriver(name) != "nvidia",
+			StatusReliable: h.connectorDriver(name) != "nvidia",
 		}
 
 		// First try the kernel's direct connector -> I2C mapping.
@@ -213,4 +206,19 @@ func findDRMConnectors() ([]DRMConnector, error) {
 	}
 
 	return connectors, nil
+}
+
+func busFromPath(path string) (int, bool) {
+	name := filepath.Base(path)
+
+	if !strings.HasPrefix(name, "i2c-") {
+		return 0, false
+	}
+
+	num, err := strconv.Atoi(strings.TrimPrefix(name, "i2c-"))
+	if err != nil {
+		return 0, false
+	}
+
+	return num, true
 }

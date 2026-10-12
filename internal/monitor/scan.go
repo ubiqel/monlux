@@ -1,175 +1,31 @@
-package main
+package monitor
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/ubiqel/shine/internal/i2c"
-	"golang.org/x/sys/unix"
 )
 
-// Hardware access, as variables so tests can replace it with fakes.
-var (
-	readEDID = readEDIDFromBus
-	probeDDC = probeDDCOnBus
-)
-
-const cacheTTL = 60 * time.Second
-
-type MonitorsCache struct {
-	Monitors  []Monitor `json:"monitors"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-type Monitor struct {
-	I2CBus       int       `json:"i2c_bus"`
-	EDIDIdentity string    `json:"edid_identity"`
-	EDIDRaw      [128]byte `json:"edid_raw"`
-	DRMConnector *string   `json:"drm_connector,omitempty"`
-}
-
-// BusReport records what a scan found on one candidate I2C bus. There is one
-// per candidate bus, so a bus that isn't reported as a monitor can be explained.
-type BusReport struct {
-	Bus       int
-	Identity  string // EDID identity; empty if the EDID couldn't be read
-	Connector string // linked DRM connector; empty if none
-	Link      string // how Connector was linked: "ddc" or "edid"
-	Sysfs     string // sysfs EDID vs the bus EDID: "match", "mismatch", or "none"
-	Panel     bool   // the linked connector is a laptop's built-in panel
-	Probed    bool   // a DDC/CI probe was attempted
-	DDC       bool   // the bus answered DDC/CI (only meaningful when Probed)
-	Result    string // "monitor", or why the bus isn't reported as one
-}
-
-// ScanResult is the outcome of one scan.
-type ScanResult struct {
-	Monitors []Monitor
-	Buses    []BusReport
-	// Unlinked lists connected connectors that no monitor was linked to.
-	Unlinked []string
-}
-
-func scanMonitors() []Monitor {
-	cached, err := readMonitorsCache()
-	switch {
-	case err == nil:
-		if age := time.Since(cached.UpdatedAt); age >= 0 && age <= cacheTTL {
-			return cached.Monitors
-		}
-	case errors.Is(err, ErrNoCache):
-	default:
-		slog.Warn("Failed to read monitors cache, scanning instead.", "error", err)
-	}
-
-	monitors := scan().Monitors
-	if len(monitors) == 0 {
-		return monitors
-	}
-
-	if err := writeMonitorsCache(monitors); err != nil {
-		slog.Warn("Failed to save monitors cache.", "error", err)
-	}
-
-	return monitors
-}
-
-var ErrNoCache = errors.New("no cache file exists")
-
-func readMonitorsCache() (MonitorsCache, error) {
-	cacheFilepath, err := resolveMonitorsCacheLocation()
-	if err != nil {
-		return MonitorsCache{}, err
-	}
-
-	content, err := os.ReadFile(cacheFilepath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return MonitorsCache{}, ErrNoCache
-		}
-
-		return MonitorsCache{}, fmt.Errorf("reading cache file: %w", err)
-	}
-
-	var cache MonitorsCache
-	err = json.Unmarshal(content, &cache)
-	if err != nil {
-		slog.Warn("Failed to unmarshal cache file content as JSON.", "error", err)
-		if err := os.Remove(cacheFilepath); err != nil {
-			slog.Warn("Failed to remove file with corrupted cache.", "error", err, "cache_filepath", cacheFilepath)
-		}
-
-		return MonitorsCache{}, ErrNoCache
-	}
-
-	return cache, nil
-}
-
-func writeMonitorsCache(monitors []Monitor) error {
-	cacheFilepath, err := resolveMonitorsCacheLocation()
-	if err != nil {
-		return err
-	}
-
-	cache := MonitorsCache{
-		Monitors:  monitors,
-		UpdatedAt: time.Now(),
-	}
-
-	content, err := json.Marshal(cache)
-	if err != nil {
-		return fmt.Errorf("marshalling to json: %w", err)
-	}
-
-	err = os.WriteFile(cacheFilepath, content, 0o644)
-	if err != nil {
-		return fmt.Errorf("writing cache file: %w", err)
-	}
-
-	return nil
-}
-
-func resolveMonitorsCacheLocation() (string, error) {
-	return resolveCacheFile("monitors.json")
-}
-
-func resolveCacheFile(name string) (string, error) {
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		return "", fmt.Errorf("resolving user cache dir location: %w", err)
-	}
-	appCacheDir := filepath.Join(cacheDir, cliName)
-	err = os.MkdirAll(appCacheDir, 0o755)
-	if err != nil {
-		return "", fmt.Errorf("creating app cache dir: %w", err)
-	}
-
-	return filepath.Join(appCacheDir, name), nil
-}
-
-func scan() ScanResult {
+// Scan looks for DDC/CI monitors on the host.
+func (h Host) Scan() ScanResult {
 	// Discover DRM connectors first. Their status (when trusted) and (when
 	// available) DDC/I2C mapping tell us which buses are worth probing, so we
 	// avoid touching buses whose connectors are disconnected. Reads on those
 	// can block for hundreds of milliseconds waiting on an absent monitor.
-	connectors, err := findDRMConnectors()
+	connectors, err := h.findDRMConnectors()
 	if err != nil {
 		slog.Debug("Failed to find DRM connectors.", "error", err)
 		connectors = nil
 	}
 
-	buses := candidateBuses(connectors)
+	buses := h.candidateBuses(connectors)
 	if len(buses) == 0 {
 		// Without usable DRM information, fall back to probing every bus.
-		buses = allI2CBuses()
+		buses = h.allI2CBuses()
 	}
 	slices.Sort(buses)
 
@@ -183,7 +39,7 @@ func scan() ScanResult {
 		reportOf[bus] = idx
 		res.Buses = append(res.Buses, BusReport{Bus: bus})
 
-		edid, err := readEDID(bus)
+		edid, err := h.ReadEDID(bus)
 		if err != nil {
 			slog.Debug("Failed to read EDID from I2C bus.", "error", err, "bus", bus)
 			res.Buses[idx].Result = fmt.Sprintf("no EDID: %v", err)
@@ -232,7 +88,7 @@ func scan() ScanResult {
 		}
 
 		r.Probed = true
-		r.DDC = probeDDC(m.I2CBus)
+		r.DDC = h.ProbeDDC(m.I2CBus)
 		if !r.DDC {
 			r.Result = "EDID only, DDC/CI not answering"
 			slog.Debug("Bus answers EDID but not DDC/CI.", "bus", m.I2CBus)
@@ -458,26 +314,4 @@ func busesOf(monitors []Monitor, idx []int) []int {
 	}
 
 	return buses
-}
-
-func readEDIDFromBus(bus int) ([128]byte, error) {
-	fd, err := openBus(bus)
-	if err != nil {
-		return [128]byte{}, fmt.Errorf("opening bus: %w", err)
-	}
-	defer unix.Close(fd)
-
-	return i2c.ReadEdid(fd)
-}
-
-func probeDDCOnBus(bus int) bool {
-	fd, err := openBus(bus)
-	if err != nil {
-		slog.Debug("Failed to open fd for I2C bus.", "error", err, "bus", bus)
-
-		return false
-	}
-	defer unix.Close(fd)
-
-	return i2c.ProbeDDC(fd)
 }

@@ -1,4 +1,4 @@
-package main
+package monitor
 
 import (
 	"encoding/json"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/matryer/is"
+	"github.com/ubiqel/shine/internal/cache"
 )
 
 func isolateCache(t *testing.T) {
@@ -17,31 +18,34 @@ func isolateCache(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 }
 
+func monitorsCachePath(t *testing.T) string {
+	t.Helper()
+
+	path, err := cache.Path(monitorsCacheName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return path
+}
+
 // writeCacheFile writes a cache file with the given contents, bypassing
 // writeMonitorsCache so the UpdatedAt timestamp can be chosen.
-func writeCacheFile(t *testing.T, cache MonitorsCache) {
+func writeCacheFile(t *testing.T, c monitorsCache) {
 	t.Helper()
 
 	is := is.New(t)
 
-	path, err := resolveMonitorsCacheLocation()
+	content, err := json.Marshal(c)
 	is.NoErr(err)
 
-	content, err := json.Marshal(cache)
-	is.NoErr(err)
-
-	is.NoErr(os.WriteFile(path, content, 0o644))
+	is.NoErr(os.WriteFile(monitorsCachePath(t), content, 0o644))
 }
 
 func cacheFileExists(t *testing.T) bool {
 	t.Helper()
 
-	is := is.New(t)
-
-	path, err := resolveMonitorsCacheLocation()
-	is.NoErr(err)
-
-	_, err = os.Stat(path)
+	_, err := os.Stat(monitorsCachePath(t))
 
 	return err == nil
 }
@@ -79,19 +83,17 @@ func TestReadMonitorsCacheMissing(t *testing.T) {
 	is := is.New(t)
 
 	_, err := readMonitorsCache()
-	is.True(errors.Is(err, ErrNoCache))
+	is.True(errors.Is(err, cache.ErrNotExist))
 }
 
 func TestReadMonitorsCacheCorruptIsRemoved(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	path, err := resolveMonitorsCacheLocation()
-	is.NoErr(err)
-	mustWrite(t, path, []byte("{not json"))
+	is.NoErr(os.WriteFile(monitorsCachePath(t), []byte("{not json"), 0o644))
 
-	_, err = readMonitorsCache()
-	is.True(errors.Is(err, ErrNoCache))
+	_, err := readMonitorsCache()
+	is.True(errors.Is(err, cache.ErrNotExist))
 	is.True(!cacheFileExists(t))
 }
 
@@ -101,12 +103,10 @@ func TestReadMonitorsCacheUnreadableReturnsError(t *testing.T) {
 
 	// A directory where the file should be can't be read as a file, and this
 	// works even when the tests run as root.
-	path, err := resolveMonitorsCacheLocation()
-	is.NoErr(err)
-	mustMkdir(t, path)
+	mustMkdir(t, monitorsCachePath(t))
 
-	_, err = readMonitorsCache()
-	is.True(err != nil && !errors.Is(err, ErrNoCache))
+	_, err := readMonitorsCache()
+	is.True(err != nil && !errors.Is(err, cache.ErrNotExist))
 }
 
 func TestCacheDirIsTraversableByOwner(t *testing.T) {
@@ -115,20 +115,17 @@ func TestCacheDirIsTraversableByOwner(t *testing.T) {
 
 	is.NoErr(writeMonitorsCache([]Monitor{{I2CBus: 4}}))
 
-	path, err := resolveMonitorsCacheLocation()
-	is.NoErr(err)
-
-	info, err := os.Stat(filepath.Dir(path))
+	info, err := os.Stat(filepath.Dir(monitorsCachePath(t)))
 	is.NoErr(err)
 
 	is.True(info.Mode().Perm()&0o700 == 0o700)
 }
 
-func TestScanMonitorsUsesFreshCache(t *testing.T) {
+func TestMonitorsUsesFreshCache(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	reads := installFixture(t, fixture{
+	host, reads := installFixture(t, fixture{
 		gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}}},
 		connectors: []fxConnector{
 			{name: "card0-DP-2", gpu: 0, status: "connected", edid: makeEDID("ALPHA"), ddcBus: 4},
@@ -137,22 +134,22 @@ func TestScanMonitorsUsesFreshCache(t *testing.T) {
 	})
 
 	// Bus 9 is not in the fixture, so getting it back proves the cache was used.
-	writeCacheFile(t, MonitorsCache{
+	writeCacheFile(t, monitorsCache{
 		Monitors:  []Monitor{{I2CBus: 9, EDIDIdentity: "CACHED"}},
 		UpdatedAt: time.Now(),
 	})
 
-	got := scanMonitors()
+	got := host.Monitors()
 
 	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{9})
 	is.Equal(len(*reads), 0)
 }
 
-func TestScanMonitorsRescansStaleCache(t *testing.T) {
+func TestMonitorsRescansStaleCache(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	installFixture(t, fixture{
+	host, _ := installFixture(t, fixture{
 		gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}}},
 		connectors: []fxConnector{
 			{name: "card0-DP-2", gpu: 0, status: "connected", edid: makeEDID("ALPHA"), ddcBus: 4},
@@ -160,12 +157,12 @@ func TestScanMonitorsRescansStaleCache(t *testing.T) {
 		buses: map[int]fxBus{4: {edid: makeEDID("ALPHA"), ddc: true}},
 	})
 
-	writeCacheFile(t, MonitorsCache{
+	writeCacheFile(t, monitorsCache{
 		Monitors:  []Monitor{{I2CBus: 9, EDIDIdentity: "CACHED"}},
-		UpdatedAt: time.Now().Add(-2 * cacheTTL),
+		UpdatedAt: time.Now().Add(-2 * monitorsCacheTTL),
 	})
 
-	got := scanMonitors()
+	got := host.Monitors()
 	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{4})
 
 	cached, err := readMonitorsCache()
@@ -173,11 +170,11 @@ func TestScanMonitorsRescansStaleCache(t *testing.T) {
 	is.Equal(monitorBuses(ScanResult{Monitors: cached.Monitors}), []int{4})
 }
 
-func TestScanMonitorsDoesNotCacheEmptyResult(t *testing.T) {
+func TestMonitorsDoesNotCacheEmptyResult(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	installFixture(t, fixture{
+	host, _ := installFixture(t, fixture{
 		gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}}},
 		connectors: []fxConnector{
 			{name: "card0-DP-2", gpu: 0, status: "connected", edid: makeEDID("ALPHA"), ddcBus: 4},
@@ -185,11 +182,11 @@ func TestScanMonitorsDoesNotCacheEmptyResult(t *testing.T) {
 		buses: map[int]fxBus{4: {edid: makeEDID("ALPHA"), ddc: false}},
 	})
 
-	is.Equal(len(scanMonitors()), 0)
+	is.Equal(len(host.Monitors()), 0)
 	is.True(!cacheFileExists(t))
 }
 
-func TestScanMonitorsSurvivesCacheWriteFailure(t *testing.T) {
+func TestMonitorsSurvivesCacheWriteFailure(t *testing.T) {
 	// A regular file where the cache directory should go makes every cache
 	// operation fail. The scan must still return its monitors.
 	blocker := filepath.Join(t.TempDir(), "blocker")
@@ -198,7 +195,7 @@ func TestScanMonitorsSurvivesCacheWriteFailure(t *testing.T) {
 
 	is := is.New(t)
 
-	installFixture(t, fixture{
+	host, _ := installFixture(t, fixture{
 		gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}}},
 		connectors: []fxConnector{
 			{name: "card0-DP-2", gpu: 0, status: "connected", edid: makeEDID("ALPHA"), ddcBus: 4},
@@ -206,6 +203,6 @@ func TestScanMonitorsSurvivesCacheWriteFailure(t *testing.T) {
 		buses: map[int]fxBus{4: {edid: makeEDID("ALPHA"), ddc: true}},
 	})
 
-	got := scanMonitors()
+	got := host.Monitors()
 	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{4})
 }

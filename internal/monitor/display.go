@@ -1,7 +1,6 @@
-package main
+package monitor
 
 import (
-	"cmp"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ubiqel/shine/internal/i2c"
 	"golang.org/x/sys/unix"
 )
 
@@ -19,24 +19,24 @@ const (
 	idTypeI2C  = "i2c"
 )
 
-// withDisplay resolves a DISPLAY argument, opens its I2C bus and runs fn with
+// WithDisplay resolves a DISPLAY argument, opens its I2C bus and runs fn with
 // the fd and the monitor. The fd is always closed. If fn fails while the display
 // is asleep, the error says so, since a sleeping display is the usual reason
 // DDC/CI fails.
-func withDisplay(id string, fn func(fd int, m Monitor) error) error {
-	m, err := resolveDisplay(id)
+func (h Host) WithDisplay(id string, fn func(fd int, m Monitor) error) error {
+	m, err := h.Resolve(id)
 	if err != nil {
 		return err
 	}
 
-	fd, err := openBus(m.I2CBus)
+	fd, err := i2c.Open(m.I2CBus)
 	if err != nil {
 		return fmt.Errorf("opening fd for bus '%v': %w", m.I2CBus, err)
 	}
 	defer unix.Close(fd)
 
 	if err := fn(fd, m); err != nil {
-		if state, asleep := dpmsState(m); asleep {
+		if state, asleep := h.DPMSState(m); asleep {
 			return fmt.Errorf("display is asleep (DPMS %s): %w", state, err)
 		}
 
@@ -46,14 +46,14 @@ func withDisplay(id string, fn func(fd int, m Monitor) error) error {
 	return nil
 }
 
-// dpmsState returns the DPMS state of the monitor's DRM connector (e.g. "On",
+// DPMSState returns the DPMS state of the monitor's DRM connector (e.g. "On",
 // "Standby", "Off") and whether it's asleep. Unknown states are not asleep.
-func dpmsState(m Monitor) (state string, asleep bool) {
+func (h Host) DPMSState(m Monitor) (state string, asleep bool) {
 	if m.DRMConnector == nil {
 		return "", false
 	}
 
-	raw, err := os.ReadFile(filepath.Join(drmPath, *m.DRMConnector, "dpms"))
+	raw, err := os.ReadFile(filepath.Join(h.DRMPath, *m.DRMConnector, "dpms"))
 	if err != nil {
 		return "", false
 	}
@@ -63,13 +63,15 @@ func dpmsState(m Monitor) (state string, asleep bool) {
 	return state, state != "" && state != "On"
 }
 
-func resolveDisplay(id string) (Monitor, error) {
+// Resolve finds the single monitor that a DISPLAY argument names. The argument
+// is "<id>" (a DRM connector), or "<type>:<id>" with type drm, edid or i2c.
+func (h Host) Resolve(id string) (Monitor, error) {
 	displayId, displayIDType, err := parseDisplayID(id)
 	if err != nil {
 		return Monitor{}, fmt.Errorf("parsing DISPLAY argument: %w", err)
 	}
 
-	monitors := scanMonitors()
+	monitors := h.Monitors()
 
 	// Collect every match: an identity can be shared by several monitors, and
 	// silently picking one would send the command to the wrong display.
@@ -117,7 +119,7 @@ func resolveDisplay(id string) (Monitor, error) {
 	}
 }
 
-func parseDisplayID(input string) (id string, tp string, err error) {
+func parseDisplayID(input string) (id, tp string, err error) {
 	if input == "" {
 		return "", "", errors.New("missing display argument")
 	}
@@ -135,33 +137,4 @@ func parseDisplayID(input string) (id string, tp string, err error) {
 	default:
 		return "", "", fmt.Errorf("unknown display id type '%s'", tp)
 	}
-}
-
-func busFromPath(path string) (int, bool) {
-	name := filepath.Base(path)
-
-	if !strings.HasPrefix(name, "i2c-") {
-		return 0, false
-	}
-
-	num, err := strconv.Atoi(strings.TrimPrefix(name, "i2c-"))
-	if err != nil {
-		return 0, false
-	}
-
-	return num, true
-}
-
-func openBus(bus int) (fd int, err error) {
-	return unix.Open(fmt.Sprintf("/dev/i2c-%d", bus), unix.O_RDWR, 0)
-}
-
-func clamp[T cmp.Ordered](value, minimum, maximum T) T {
-	if value < minimum {
-		return minimum
-	}
-	if value > maximum {
-		return maximum
-	}
-	return value
 }

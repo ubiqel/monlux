@@ -43,6 +43,11 @@ const (
 	VCP_RETRY_DELAY = 40 * time.Millisecond
 )
 
+// Open opens /dev/i2c-N for DDC/CI and EDID access. The caller closes the fd.
+func Open(bus int) (int, error) {
+	return unix.Open(fmt.Sprintf("/dev/i2c-%d", bus), unix.O_RDWR, 0)
+}
+
 func ReadEdid(fd int) ([128]byte, error) {
 	var edid [128]byte
 	off := [1]byte{0x00}

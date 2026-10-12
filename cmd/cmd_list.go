@@ -7,12 +7,14 @@ import (
 	"sync"
 
 	"github.com/ubiqel/shine/internal/i2c"
+	"github.com/ubiqel/shine/internal/monitor"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/sys/unix"
 )
 
 func runListCmd(ctx context.Context, cmd *cli.Command) error {
-	monitors := scanMonitors()
+	host := monitor.DefaultHost()
+	monitors := host.Monitors()
 
 	type row struct {
 		drm        string
@@ -43,7 +45,7 @@ func runListCmd(ctx context.Context, cmd *cli.Command) error {
 				r.drm = *m.DRMConnector
 			}
 
-			fd, err := openBus(m.I2CBus)
+			fd, err := i2c.Open(m.I2CBus)
 			if err != nil {
 				slog.Warn("Failed to open fd for I2C bus", "bus", m.I2CBus)
 				r.brightness = "?"
@@ -54,7 +56,7 @@ func runListCmd(ctx context.Context, cmd *cli.Command) error {
 
 			pct, _, _, err := i2c.ReadBrightness(fd)
 			unix.Close(fd)
-			switch _, asleep := dpmsState(m); {
+			switch _, asleep := host.DPMSState(m); {
 			case err == nil:
 				r.brightness = fmt.Sprintf("%d%%", pct)
 			case asleep:

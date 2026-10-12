@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ubiqel/shine/internal/monitor"
 	"github.com/urfave/cli/v3"
 )
 
 func runDetectCmd(ctx context.Context, cmd *cli.Command) error {
-	res := scan()
+	res := monitor.DefaultHost().Scan()
 
 	if len(res.Buses) == 0 {
 		fmt.Println("No candidate I2C buses found.")
@@ -41,7 +42,7 @@ func runDetectCmd(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-func connectorLabel(r BusReport) string {
+func connectorLabel(r monitor.BusReport) string {
 	if r.Connector == "" {
 		return "-"
 	}
@@ -53,7 +54,7 @@ func connectorLabel(r BusReport) string {
 	return fmt.Sprintf("%s (linked by %s)", r.Connector, r.Link)
 }
 
-func ddcLabel(r BusReport) string {
+func ddcLabel(r monitor.BusReport) string {
 	switch {
 	case !r.Probed:
 		return "not probed"
