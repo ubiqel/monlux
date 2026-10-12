@@ -23,6 +23,9 @@ func TestParseCycleSteps(t *testing.T) {
 		{"negative", "0,-5", nil, false, true},
 		{"duplicate", "0,50,50", nil, false, true},
 		{"unordered after ascending start", "0,50,20", nil, false, true},
+		{"unordered after descending start", "100,50,70", nil, false, true},
+		{"trailing step after descending start", "100,50,0,20", nil, false, true},
+		{"descending with uneven gaps", "100,70,50,0", []uint{100, 70, 50, 0}, false, false},
 	}
 
 	for _, tt := range tests {
@@ -64,4 +67,41 @@ func TestNextCycleTargetForward(t *testing.T) {
 			is.Equal(NextCycleTarget(tt.curr, steps, true), tt.want)
 		})
 	}
+}
+
+func TestNextCycleTargetBackward(t *testing.T) {
+	steps := []uint{100, 50, 0}
+
+	tests := []struct {
+		name string
+		curr uint
+		want uint
+	}{
+		{"above the first step", 120, 100},
+		{"on the first step", 100, 50},
+		{"between steps", 60, 50},
+		{"on a middle step", 50, 0},
+		{"between the last step and the middle", 10, 0},
+		{"at the last step wraps to the first", 0, 100},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			is := is.New(t)
+
+			is.Equal(NextCycleTarget(tt.curr, steps, false), tt.want)
+		})
+	}
+}
+
+func TestNextCycleTargetBackwardUnsorted(t *testing.T) {
+	// Steps need not be evenly spaced, so the nearest lower step is found by
+	// value.
+	steps := []uint{100, 70, 50, 0}
+
+	is := is.New(t)
+
+	is.Equal(NextCycleTarget(60, steps, false), uint(50))
+	is.Equal(NextCycleTarget(80, steps, false), uint(70))
+	is.Equal(NextCycleTarget(0, steps, false), uint(100))
 }
