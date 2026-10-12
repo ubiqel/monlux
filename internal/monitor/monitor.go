@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/ubiqel/shine/internal/i2c"
+	"github.com/ubiqel/monlux/internal/i2c"
 	"golang.org/x/sys/unix"
 )
 

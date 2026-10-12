@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/ubiqel/shine/internal/i2c"
-	"github.com/ubiqel/shine/internal/monitor"
+	"github.com/ubiqel/monlux/internal/i2c"
+	"github.com/ubiqel/monlux/internal/monitor"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/sys/unix"
 )

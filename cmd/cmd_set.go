@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ubiqel/shine/internal/brightness"
-	"github.com/ubiqel/shine/internal/monitor"
+	"github.com/ubiqel/monlux/internal/brightness"
+	"github.com/ubiqel/monlux/internal/monitor"
 	"github.com/urfave/cli/v3"
 )
 

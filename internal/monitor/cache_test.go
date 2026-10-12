@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/matryer/is"
-	"github.com/ubiqel/shine/internal/cache"
+	"github.com/ubiqel/monlux/internal/cache"
 )
 
 func isolateCache(t *testing.T) {

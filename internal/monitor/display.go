@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ubiqel/shine/internal/i2c"
+	"github.com/ubiqel/monlux/internal/i2c"
 	"golang.org/x/sys/unix"
 )
 

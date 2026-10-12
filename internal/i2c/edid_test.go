@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/matryer/is"
-	"github.com/ubiqel/shine/internal/i2c"
+	"github.com/ubiqel/monlux/internal/i2c"
 )
 
 func TestParseIdentity(t *testing.T) {

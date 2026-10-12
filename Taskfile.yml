@@ -33,12 +33,12 @@ tasks:
   build.debug:
     desc: Build debug version of binary.
     cmds:
-      - CGO_ENABLED=0 go build -gcflags="all=-N -l" -o ./build/shine ./cmd
+      - CGO_ENABLED=0 go build -gcflags="all=-N -l" -o ./build/monlux ./cmd
 
   build.release:
     desc: Build debug version of binary.
     cmds:
-      - CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ./build/shine ./cmd
+      - CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ./build/monlux ./cmd
 
   release.snapshot:
     desc: Build release artifacts locally without publishing.

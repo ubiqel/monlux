@@ -1,4 +1,4 @@
-module github.com/ubiqel/shine
+module github.com/ubiqel/monlux
 
 go 1.27.1
 

@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ubiqel/shine/internal/i2c"
-	"github.com/ubiqel/shine/internal/monitor"
+	"github.com/ubiqel/monlux/internal/i2c"
+	"github.com/ubiqel/monlux/internal/monitor"
 )
 
 // Current returns the brightness of m as a percentage and its raw maximum. With

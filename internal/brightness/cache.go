@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ubiqel/shine/internal/cache"
+	"github.com/ubiqel/monlux/internal/cache"
 )
 
 const cacheName = "brightness.json"
@@ -25,7 +25,7 @@ type Entry struct {
 	Current   uint16    `json:"current"`
 	Maximum   uint16    `json:"maximum"`
 	UpdatedAt time.Time `json:"updated_at"` // last time the value was read or written
-	WrittenAt time.Time `json:"written_at"` // last time shine wrote the value
+	WrittenAt time.Time `json:"written_at"` // last time monlux wrote the value
 }
 
 // Cache holds the entries, keyed by I2C bus.

@@ -5,17 +5,17 @@ before:
     - go mod verify
 
 builds:
-  - id: shine
+  - id: monlux
     main: ./cmd
-    binary: shine
+    binary: monlux
     env:
       - CGO_ENABLED=0
     flags:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/ubiqel/shine/internal/version.Version={{ .Version }}
-      - -X github.com/ubiqel/shine/internal/version.Commit={{ .FullCommit }}
+      - -X github.com/ubiqel/monlux/internal/version.Version={{ .Version }}
+      - -X github.com/ubiqel/monlux/internal/version.Commit={{ .FullCommit }}
     goos:
       - linux
     goarch:
@@ -23,7 +23,7 @@ builds:
       - arm64
 
 archives:
-  - id: shine
+  - id: monlux
     formats:
       - tar.gz
     name_template: >-
@@ -50,6 +50,6 @@ changelog:
 release:
   github:
     owner: ubiqel
-    name: shine
+    name: monlux
   draft: false
   prerelease: auto

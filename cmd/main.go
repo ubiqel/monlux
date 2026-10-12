@@ -6,10 +6,10 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/ubiqel/shine/internal/lock"
-	"github.com/ubiqel/shine/internal/log"
-	"github.com/ubiqel/shine/internal/profile"
-	"github.com/ubiqel/shine/internal/version"
+	"github.com/ubiqel/monlux/internal/lock"
+	"github.com/ubiqel/monlux/internal/log"
+	"github.com/ubiqel/monlux/internal/profile"
+	"github.com/ubiqel/monlux/internal/version"
 	"github.com/urfave/cli/v3"
 )
 
@@ -197,7 +197,7 @@ func main() {
 	}
 }
 
-const cliName = "shine"
+const cliName = "monlux"
 
 const displayArg = "DISPLAY"
 

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Linux-only Go CLI (`github.com/ubiqel/shine`) that controls external monitor brightness over DDC/CI. Talks to `/sys/class/drm`, `/sys/bus/i2c/devices` and `/dev/i2c-N` directly.
+Linux-only Go CLI (`github.com/ubiqel/monlux`) that controls external monitor brightness over DDC/CI. Talks to `/sys/class/drm`, `/sys/bus/i2c/devices` and `/dev/i2c-N` directly.
 
 ## Commands
 
@@ -9,9 +9,9 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 - `task test`: `gotestsum -- -race ./...`. Single test: `go test -race -run TestName ./internal/monitor`.
 - `task lint`: `golangci-lint run ./...` (config in `.golangci.yaml`).
 - `task format`: `gofumpt --extra -w ./`.
-- `task build.release`: writes `build/shine`. `build/` is gitignored.
+- `task build.release`: writes `build/monlux`. `build/` is gitignored.
 - `task deps`: `go mod tidy` + `go mod vendor`. It needs network. `vendor/` is committed and used (`modules-download-mode: vendor`), so after any dependency change re-vendor and commit `vendor/`.
-- `go run ./cmd --debug <subcommand>` runs with debug logging and writes CPU profile and trace files to `$XDG_CACHE_HOME/shine/debug/` (`os.UserCacheDir`).
+- `go run ./cmd --debug <subcommand>` runs with debug logging and writes CPU profile and trace files to `$XDG_CACHE_HOME/monlux/debug/` (`os.UserCacheDir`).
 
 ## Lint state
 
@@ -36,20 +36,20 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
   - `brightness.go`: `Current`, `Write`, `Observe` (cache-aware), and `Clamp`.
   - `cache.go`: brightness cache entries, TTL, and recent-write rules.
 - `internal/i2c/`: DDC/CI and EDID over the I2C ioctl. `Open(bus)` opens `/dev/i2c-N`. Also VCP (brightness) access and checksum code.
-- `internal/cache/`: file storage under `$XDG_CACHE_HOME/shine/` only (`Path`, `ReadJSON`, `WriteJSON`, `ErrNotExist`). It has no cache rules of its own.
-- `internal/lock/`: exclusive `flock` on `$TMPDIR/shine.lock`, taken in `main`'s `Before` hook for every invocation.
+- `internal/cache/`: file storage under `$XDG_CACHE_HOME/monlux/` only (`Path`, `ReadJSON`, `WriteJSON`, `ErrNotExist`). It has no cache rules of its own.
+- `internal/lock/`: exclusive `flock` on `$TMPDIR/monlux.lock`, taken in `main`'s `Before` hook for every invocation.
 - `internal/profile/`, `internal/log/`, `internal/version/`: debug profiling, slog handler, version string.
 
 ## Gotchas
 
-- **Lock serializes everything.** Every command holds the global lock, so concurrent `shine` calls queue. A hung I2C transaction blocks all others.
+- **Lock serializes everything.** Every command holds the global lock, so concurrent `monlux` calls queue. A hung I2C transaction blocks all others.
 - **Writes hit real hardware.** `set`, `up`, `down` and `cycle` change the actual monitor, even when you're only experimenting. Use `list` or `get` to inspect.
 - **Display IDs.** `DISPLAY` defaults to a DRM connector name (e.g. `card1-DP-2`). Prefixes `drm:`, `edid:`, `i2c:` select other identity types. Multiple matches are an error, and you must pick one with `i2c:<bus>`.
 - **Cycle steps.** `--steps` must be strictly ascending or strictly descending, with no duplicates. The first two entries set the direction. Forward moves to the nearest higher step, and backward to the nearest lower one. Past either end, it wraps to the opposite end.
 - **Caches can return stale values.**
-  - Monitor list is cached in `$XDG_CACHE_HOME/shine/monitors.json` for 60 s (`internal/monitor`). Scans that find no monitors aren't cached.
+  - Monitor list is cached in `$XDG_CACHE_HOME/monlux/monitors.json` for 60 s (`internal/monitor`). Scans that find no monitors aren't cached.
   - Brightness is cached in `brightness.json` for 10 s, keyed by I2C bus and EDID identity (`internal/brightness`).
-  - When debugging brightness or detection, add `--no-brightness-cache`, or delete the files under `$XDG_CACHE_HOME/shine/`.
+  - When debugging brightness or detection, add `--no-brightness-cache`, or delete the files under `$XDG_CACHE_HOME/monlux/`.
 - **Failures on a sleeping display.** `Host.WithDisplay` reports DPMS "asleep" when a DDC operation fails. Check the display state before debugging the I2C code.
 - **Hardware is injected through `monitor.Host`.** It holds the sysfs paths (`DRMPath`, `I2CSysPath`, `DevPath`) and the hardware hooks (`ReadEDID`, `ProbeDDC`). Production code uses `monitor.DefaultHost()`. There are no package globals to swap.
 - **Tests never touch real hardware.** `internal/monitor/fixture_test.go` (`installFixture`) builds a fake sysfs and `/dev` tree in a temp dir and returns a `Host` wired to fake buses. Keep new tests hermetic the same way. Brightness tests pass a `-1` fd, so any real I/O fails.

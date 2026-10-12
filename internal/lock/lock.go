@@ -14,7 +14,7 @@ type Lock int
 func Acquire() (Lock, error) {
 	// We use temp dir instead of XDG_RUNTIME_DIR to handle the situation
 	// in which our app is running under multiple users at the same time.
-	path := filepath.Join(os.TempDir(), "shine.lock")
+	path := filepath.Join(os.TempDir(), "monlux.lock")
 	fd, err := unix.Open(path, unix.O_CREAT|unix.O_RDONLY|unix.O_CLOEXEC, 0o666)
 	if err != nil {
 		return 0, fmt.Errorf("openning fd '%s' for lock: %w", path, err)

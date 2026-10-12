@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ubiqel/shine/internal/i2c"
+	"github.com/ubiqel/monlux/internal/i2c"
 )
 
 // Scan looks for DDC/CI monitors on the host.

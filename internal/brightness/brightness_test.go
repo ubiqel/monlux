@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/matryer/is"
-	"github.com/ubiqel/shine/internal/monitor"
+	"github.com/ubiqel/monlux/internal/monitor"
 )
 
 // noDevice is a fd that can't be used for DDC/CI, so any hardware access fails.

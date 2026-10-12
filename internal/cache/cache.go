@@ -1,4 +1,4 @@
-// Package cache stores shine's cache files in the user's cache directory. The
+// Package cache stores monlux's cache files in the user's cache directory. The
 // cache is only an optimization, so a file that can't be read or parsed is
 // treated as missing.
 package cache
@@ -14,7 +14,7 @@ import (
 
 // appDirName names the directory under the user's cache directory. It matches
 // the CLI name.
-const appDirName = "shine"
+const appDirName = "monlux"
 
 // ErrNotExist means there is no usable cache file. It is returned for a missing
 // file and for a corrupted one, which is removed.

@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ubiqel/shine/internal/cache"
+	"github.com/ubiqel/monlux/internal/cache"
 )
 
 const monitorsCacheName = "monitors.json"
