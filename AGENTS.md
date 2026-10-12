@@ -17,7 +17,7 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 
 `golangci-lint run ./...` and `gofumpt --extra -l cmd internal` are both clean. Keep them that way: fix new findings in your change rather than suppressing them.
 
-- Project-wide exclusions live in `.golangci.yaml`: `paralleltest` and `nonamedreturns` are disabled, `funlen` is excluded for `cmd/monlux/main.go`, `forbidigo` for `cmd/monlux/`, and gosec G304 and G115 everywhere.
+- Project-wide exclusions live in `.golangci.yaml`
 - Use an inline `//nolint:<linter> // reason` only for a single, isolated case (e.g. G103 on the ioctl call). If a pattern repeats, add a config exclusion instead.
 
 ## Layout
@@ -31,7 +31,7 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
   - `discovery.go`: DRM connectors and candidate I2C buses from sysfs.
   - `scan.go`: `Host.Scan()`, plus connector association and conflict resolution. `ScanResult` gives per-bus reasons, which `detect` prints.
   - `cache.go`: `Host.Monitors()`, the cached monitor list.
-  - `display.go`: `Host.Resolve` (DISPLAY argument matching), `Host.WithDisplay` (open bus, run action, DPMS error wording), `Host.DPMSState`.
+  - `display.go`: `Host.Resolve` (`<monitor>` argument matching), `Host.WithDisplay` (open bus, run action, DPMS error wording), `Host.DPMSState`.
 - `internal/brightness/`: reads and sets brightness.
   - `brightness.go`: `Current`, `Write`, `Observe` (cache-aware), and `Clamp`.
   - `cache.go`: brightness cache entries, TTL, and recent-write rules.
@@ -44,7 +44,7 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 
 - **Lock serializes everything.** Every command holds the global lock, so concurrent `monlux` calls queue. A hung I2C transaction blocks all others.
 - **Writes hit real hardware.** `set`, `up`, `down` and `cycle` change the actual monitor, even when you're only experimenting. Use `list` or `get` to inspect.
-- **Display IDs.** `DISPLAY` defaults to a DRM connector name (e.g. `card1-DP-2`). Prefixes `drm:`, `edid:`, `i2c:` select other identity types. Multiple matches are an error, and you must pick one with `i2c:<bus>`.
+- **Monitor IDs.** The `<monitor>` argument defaults to a DRM connector name (e.g. `card1-DP-2`). Prefixes `drm:`, `edid:`, `i2c:` select other identity types. Multiple matches are an error, and you must pick one with `i2c:<bus>`.
 - **Cycle steps.** `--steps` must be strictly ascending or strictly descending, with no duplicates. The first two entries set the direction. Forward moves to the nearest higher step, and backward to the nearest lower one. Past either end, it wraps to the opposite end.
 - **Caches can return stale values.**
   - Monitor list is cached in `$XDG_CACHE_HOME/monlux/monitors.json` for 60 s (`internal/monitor`). Scans that find no monitors aren't cached.

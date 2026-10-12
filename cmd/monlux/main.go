@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -25,10 +26,15 @@ func main() {
 
 	cmd := &cli.Command{
 		Name:                   cliName,
-		Usage:                  "Control external monitor brightness over DDC/CI.",
+		Usage:                  "control external monitor brightness over DDC/CI",
+		Description:            rootDescription,
 		Version:                version.Current().String(),
 		UseShortOptionHandling: true,
-		HideHelpCommand:        true,
+		OnUsageError:           onUsageError,
+		Action:                 runRootCmd,
+		// Errors are printed and turned into exit codes by main. Letting the
+		// library exit on its own would skip the lock release in After.
+		ExitErrHandler: func(context.Context, *cli.Command, error) {},
 		Before: func(ctx context.Context, c *cli.Command) (context.Context, error) {
 			l, err := lock.Acquire()
 			if err != nil {
@@ -74,8 +80,9 @@ func main() {
 		},
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
-				Name:  debugFlag,
-				Usage: "show debug information during command execution",
+				Name:    debugFlag,
+				Aliases: []string{"d"},
+				Usage:   "print debug logs and write CPU profile and trace files to the cache directory",
 				Action: func(_ context.Context, _ *cli.Command, debug bool) error {
 					if !debug {
 						return nil
@@ -93,95 +100,148 @@ func main() {
 		},
 		Commands: []*cli.Command{
 			{
-				Name:            "list",
-				Aliases:         []string{"ls"},
-				Usage:           "List detected monitors and their brightness",
-				HideHelpCommand: true,
-				Action:          runListCmd,
+				Name:    "list",
+				Aliases: []string{"ls"},
+				Usage:   "list detected monitors and their brightness",
+				Description: `Print one row per detected monitor, with its I2C bus, DRM connector, EDID
+identity and current brightness.
+
+Use the DRM connector as <monitor>. The EDID identity needs the edid: prefix,
+and the bus number needs the i2c: prefix.
+
+Brightness is "asleep" while the display is in DPMS sleep, and "?" when it
+could not be read.
+
+Examples:
+  monlux list`,
+				Action: runListCmd,
 			}, {
-				Name:            "detect",
-				Usage:           "Explain what was found on each I2C bus and why",
-				HideHelpCommand: true,
-				Action:          runDetectCmd,
+				Name:  "detect",
+				Usage: "explain how each I2C bus was classified",
+				Description: `For each I2C bus, show the EDID found on it, the DRM connector it was linked
+to, whether it answers DDC/CI, and the final result. Use it to find out why a
+monitor is missing from "monlux list".
+
+Examples:
+  monlux detect`,
+				Action: runDetectCmd,
 			}, {
-				Name:            "get",
-				Usage:           "Print brightness of a monitor as a percentage",
-				HideHelpCommand: true,
-				ArgsUsage:       displayArg,
+				Name:      "get",
+				Usage:     "print the brightness of a monitor as a percentage",
+				ArgsUsage: "<monitor>",
+				Description: `Print the brightness of <monitor> as a number from 0 to 100. There is no
+percent sign, so the output is easy to use in scripts.
+
+` + monitorDescription + `
+
+Examples:
+  monlux get card1-DP-2`,
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     displayArg,
+						Name:     monitorArg,
 						Required: true,
 					},
 				},
 				Flags:  []cli.Flag{noBrightnessCacheFlagDef()},
 				Action: runGetCmd,
 			}, {
-				Name:            "set",
-				Usage:           "Set brightness of a monitor as a percentage",
-				HideHelpCommand: true,
-				ArgsUsage:       "DISPLAY PERCENT",
+				Name:      "set",
+				Usage:     "set the brightness of a monitor to a percentage",
+				ArgsUsage: "<monitor> <percent>",
+				Description: `Set the brightness of <monitor> to <percent>, from 0 to 100. Values above 100
+are set to 100.
+
+` + monitorDescription + `
+
+Examples:
+  monlux set card1-DP-2 60`,
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     displayArg,
+						Name:     monitorArg,
 						Required: true,
 					},
 					&cli.UintArg{
-						Name:     "PERCENT",
+						Name:     percentArg,
 						Required: true,
 					},
 				},
 				Flags:  []cli.Flag{noBrightnessCacheFlagDef()},
 				Action: runSetCmd,
 			}, {
-				Name:            "up",
-				Usage:           "Increase brightness by step",
-				HideHelpCommand: true,
-				ArgsUsage:       "DISPLAY STEP",
+				Name:      "up",
+				Usage:     "raise the brightness of a monitor by a step",
+				ArgsUsage: "<monitor> <step>",
+				Description: `Raise the brightness of <monitor> by <step> percentage points. Brightness
+stops at 100.
+
+` + monitorDescription + `
+
+Examples:
+  monlux up card1-DP-2 10`,
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     displayArg,
+						Name:     monitorArg,
 						Required: true,
 					},
 					&cli.UintArg{
-						Name:     "STEP",
+						Name:     stepArg,
 						Required: true,
 					},
 				},
 				Flags:  []cli.Flag{noBrightnessCacheFlagDef()},
 				Action: runUpCmd,
 			}, {
-				Name:            "down",
-				Usage:           "Decrease brightness by step",
-				HideHelpCommand: true,
-				ArgsUsage:       "DISPLAY STEP",
+				Name:      "down",
+				Usage:     "lower the brightness of a monitor by a step",
+				ArgsUsage: "<monitor> <step>",
+				Description: `Lower the brightness of <monitor> by <step> percentage points. Brightness
+stops at 0.
+
+` + monitorDescription + `
+
+Examples:
+  monlux down card1-DP-2 10`,
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     displayArg,
+						Name:     monitorArg,
 						Required: true,
 					},
 					&cli.UintArg{
-						Name:     "STEP",
+						Name:     stepArg,
 						Required: true,
 					},
 				},
 				Flags:  []cli.Flag{noBrightnessCacheFlagDef()},
 				Action: runDownCmd,
 			}, {
-				Name:            "cycle",
-				Usage:           "Cycle predefined steps",
-				HideHelpCommand: true,
-				ArgsUsage:       displayArg,
+				Name:      "cycle",
+				Usage:     "cycle the brightness of a monitor through predefined steps",
+				ArgsUsage: "<monitor>",
+				Description: `Set the brightness of <monitor> to the next value in --steps.
+
+The first two steps set the direction. If the second is higher, the cycle goes
+up; if it is lower, the cycle goes down. Every later step must keep that
+direction.
+
+Going up, the next value is the first step above the current brightness. Going
+down, it is the first step below it. Past the last step, the cycle wraps around
+to the other end.
+
+` + monitorDescription + `
+
+Examples:
+  monlux cycle card1-DP-2
+  monlux cycle card1-DP-2 --steps 20,40,60,80`,
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     displayArg,
+						Name:     monitorArg,
 						Required: true,
 					},
 				},
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:  "steps",
-						Usage: "brightness steps to cycle through",
+						Usage: "comma-separated percentages to cycle through, strictly ascending or descending",
 						Value: "0,50,100",
 					},
 					noBrightnessCacheFlagDef(),
@@ -191,24 +251,92 @@ func main() {
 		},
 	}
 
+	for _, sub := range cmd.Commands {
+		sub.OnUsageError = onUsageError
+	}
+
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
-		os.Exit(1)
+		os.Exit(exitCode(err))
 	}
 }
 
 const cliName = "monlux"
 
-const displayArg = "DISPLAY"
+const monitorArg = "monitor"
+
+const (
+	percentArg = "percent"
+	stepArg    = "step"
+)
 
 const (
 	debugFlag             = "debug"
 	noBrightnessCacheFlag = "no-brightness-cache"
 )
 
+// Exit statuses. Scripts can tell a mistake in the command line apart from a
+// failure on the hardware.
+const (
+	exitFailure = 1
+	exitUsage   = 2
+)
+
+const rootDescription = `monlux controls the brightness of external monitors over DDC/CI. It finds
+monitors through /sys/class/drm and /dev/i2c-*, so it needs no other tools.
+
+Brightness is always a percentage from 0 to 100, whatever scale the monitor
+uses internally.
+
+Examples:
+  monlux list
+  monlux set card1-DP-2 60
+  monlux up card1-DP-2 10
+
+Exit status:
+  0  success
+  1  failure, such as an unknown monitor or a failed I2C transfer
+  2  invalid usage, such as an unknown command, flag or argument`
+
+const monitorDescription = `<monitor> names one monitor. Give its DRM connector, such as card1-DP-2, as
+printed by "monlux list". Other forms: drm:<connector>, edid:<identity> and
+i2c:<bus>. If several monitors match, use i2c:<bus>.`
+
 func noBrightnessCacheFlagDef() *cli.BoolFlag {
 	return &cli.BoolFlag{
 		Name:  noBrightnessCacheFlag,
 		Usage: "read and write brightness on the monitor, ignoring the brightness cache",
 	}
+}
+
+type usageError struct {
+	msg string
+}
+
+func (e *usageError) Error() string { return e.msg }
+
+func (e *usageError) ExitCode() int { return exitUsage }
+
+func newUsageError(cmd *cli.Command, msg string) error {
+	return &usageError{msg: fmt.Sprintf("%s\nRun '%s --help' for usage.", msg, cmd.FullName())}
+}
+
+func onUsageError(_ context.Context, cmd *cli.Command, err error, _ bool) error {
+	return newUsageError(cmd, err.Error())
+}
+
+func runRootCmd(_ context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() == 0 {
+		return newUsageError(cmd, "missing command")
+	}
+
+	return newUsageError(cmd, fmt.Sprintf("unknown command %q", cmd.Args().First()))
+}
+
+func exitCode(err error) int {
+	if coder, ok := errors.AsType[cli.ExitCoder](err); ok {
+		return coder.ExitCode()
+	}
+
+	return exitFailure
 }

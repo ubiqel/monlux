@@ -13,7 +13,7 @@ import (
 func runGetCmd(_ context.Context, cmd *cli.Command) error {
 	useCache := !cmd.Bool(noBrightnessCacheFlag)
 
-	return monitor.DefaultHost().WithDisplay(cmd.StringArg(displayArg), func(fd int, m monitor.Monitor) error {
+	return monitor.DefaultHost().WithDisplay(cmd.StringArg(monitorArg), func(fd int, m monitor.Monitor) error {
 		pct, raw, maximum, err := i2c.ReadBrightness(fd)
 		if err != nil {
 			return fmt.Errorf("reading brightness from i2c bus '%v': %w", m.I2CBus, err)

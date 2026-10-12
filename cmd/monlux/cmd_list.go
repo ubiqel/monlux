@@ -66,7 +66,7 @@ func runListCmd(_ context.Context, _ *cli.Command) error {
 	}
 	wg.Wait()
 
-	// Each ID column holds a value that can be passed as the DISPLAY argument.
+	// Each ID column holds a value that can be passed as the <monitor> argument.
 	headers := []string{"I2C", "DRM", "EDID", "BRIGHTNESS"}
 	colWidths := make([]int, len(headers))
 	for i, h := range headers {

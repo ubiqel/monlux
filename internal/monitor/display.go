@@ -19,7 +19,7 @@ const (
 	idTypeI2C  = "i2c"
 )
 
-// WithDisplay resolves a DISPLAY argument, opens its I2C bus and runs fn with
+// WithDisplay resolves a <monitor> argument, opens its I2C bus and runs fn with
 // the fd and the monitor. The fd is always closed. If fn fails while the display
 // is asleep, the error says so, since a sleeping display is the usual reason
 // DDC/CI fails.
@@ -63,12 +63,12 @@ func (h Host) DPMSState(m Monitor) (state string, asleep bool) {
 	return state, state != "" && state != "On"
 }
 
-// Resolve finds the single monitor that a DISPLAY argument names. The argument
+// Resolve finds the single monitor that a <monitor> argument names. The argument
 // is "<id>" (a DRM connector), or "<type>:<id>" with type drm, edid or i2c.
 func (h Host) Resolve(id string) (Monitor, error) {
 	displayID, displayIDType, err := parseDisplayID(id)
 	if err != nil {
-		return Monitor{}, fmt.Errorf("parsing DISPLAY argument: %w", err)
+		return Monitor{}, fmt.Errorf("parsing monitor argument: %w", err)
 	}
 
 	monitors := h.Monitors()
@@ -103,7 +103,7 @@ func (h Host) Resolve(id string) (Monitor, error) {
 
 	switch len(matches) {
 	case 0:
-		return Monitor{}, errors.New("monitor not found")
+		return Monitor{}, fmt.Errorf("no monitor matches %q; run 'monlux list' to see detected monitors", id)
 	case 1:
 		return matches[0], nil
 	default:
@@ -113,15 +113,15 @@ func (h Host) Resolve(id string) (Monitor, error) {
 		}
 
 		return Monitor{}, fmt.Errorf(
-			"display '%s' matches %d monitors (buses %v); select one with 'i2c:<bus>'",
-			displayID, len(matches), buses,
+			"%q matches %d monitors (I2C buses %v); select one with i2c:<bus>",
+			id, len(matches), buses,
 		)
 	}
 }
 
 func parseDisplayID(input string) (id, tp string, err error) {
 	if input == "" {
-		return "", "", errors.New("missing display argument")
+		return "", "", errors.New("missing monitor argument")
 	}
 
 	parts := strings.SplitN(strings.TrimSpace(input), ":", 2)
@@ -135,6 +135,6 @@ func parseDisplayID(input string) (id, tp string, err error) {
 	case idTypeDRM, idTypeEDID, idTypeI2C:
 		return id, tp, nil
 	default:
-		return "", "", fmt.Errorf("unknown display id type '%s'", tp)
+		return "", "", fmt.Errorf("unknown id type %q, want drm, edid or i2c", tp)
 	}
 }

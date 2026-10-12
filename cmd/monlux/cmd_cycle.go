@@ -15,12 +15,12 @@ import (
 func runCycleCmd(_ context.Context, cmd *cli.Command) error {
 	cycleSteps, forwardCycle, err := parseCycleSteps(cmd.String("steps"))
 	if err != nil {
-		return fmt.Errorf("parsing \"--steps\" flag: %w", err)
+		return fmt.Errorf("invalid --steps: %w", err)
 	}
 
 	useCache := !cmd.Bool(noBrightnessCacheFlag)
 
-	return monitor.DefaultHost().WithDisplay(cmd.StringArg(displayArg), func(fd int, m monitor.Monitor) error {
+	return monitor.DefaultHost().WithDisplay(cmd.StringArg(monitorArg), func(fd int, m monitor.Monitor) error {
 		currPct, rawMaximum, err := brightness.Current(fd, m, useCache)
 		if err != nil {
 			return fmt.Errorf("reading brightness from i2c bus '%v': %w", m.I2CBus, err)
@@ -41,15 +41,15 @@ func runCycleCmd(_ context.Context, cmd *cli.Command) error {
 // descend.
 func parseCycleSteps(input string) (steps []uint, forwardCycle bool, err error) {
 	parts := strings.Split(input, ",")
-	if len(parts) <= 1 {
-		return nil, false, errors.New("invalid value format ")
+	if len(parts) < 2 {
+		return nil, false, fmt.Errorf("%q needs at least two comma-separated percentages, e.g. 0,50,100", input)
 	}
 
 	steps = make([]uint, 0, len(parts))
 	for _, p := range parts {
-		step, err := strconv.ParseUint(p, 10, 64)
-		if err != nil {
-			return nil, false, fmt.Errorf("parsing step \"%v\" as uint: %w", p, err)
+		step, err := strconv.ParseUint(strings.TrimSpace(p), 10, 8)
+		if err != nil || step > 100 {
+			return nil, false, fmt.Errorf("%q is not a percentage from 0 to 100", p)
 		}
 		steps = append(steps, uint(step))
 	}
@@ -57,7 +57,7 @@ func parseCycleSteps(input string) (steps []uint, forwardCycle bool, err error) 
 	uniqueVals := map[uint]bool{}
 	for _, s := range steps {
 		if uniqueVals[s] {
-			return nil, false, fmt.Errorf("duplicate value '%d'; duplicate values are prohibited", s)
+			return nil, false, fmt.Errorf("step %d is listed more than once", s)
 		}
 		uniqueVals[s] = true
 	}
@@ -67,7 +67,7 @@ func parseCycleSteps(input string) (steps []uint, forwardCycle bool, err error) 
 	forwardCycle = steps[1] > steps[0]
 	for i := 2; i < len(steps); i++ {
 		if forwardCycle && steps[i] < steps[i-1] || !forwardCycle && steps[i] > steps[i-1] {
-			return nil, false, errors.New("random ordering of steps is prohibited")
+			return nil, false, errors.New("steps must be strictly ascending or strictly descending")
 		}
 	}
 

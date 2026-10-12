@@ -21,6 +21,7 @@ func TestParseCycleSteps(t *testing.T) {
 		{"single value", "50", nil, false, true},
 		{"not a number", "0,abc", nil, false, true},
 		{"negative", "0,-5", nil, false, true},
+		{"above 100", "0,50,150", nil, false, true},
 		{"duplicate", "0,50,50", nil, false, true},
 		{"unordered after ascending start", "0,50,20", nil, false, true},
 		{"unordered after descending start", "100,50,70", nil, false, true},

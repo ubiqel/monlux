@@ -1,5 +1,5 @@
 // Package monitor finds the DDC/CI monitors attached to the machine and selects
-// one by its DISPLAY identifier.
+// one by its monitor identifier.
 package monitor
 
 import (
