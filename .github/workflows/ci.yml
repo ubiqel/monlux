@@ -3,8 +3,8 @@ name: ci
 on:
   push:
     branches: ['**']
-    tags: ['v*']
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -33,23 +33,3 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go test -race ./...
-
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [lint, test]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # GoReleaser needs full history for the changelog
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - uses: goreleaser/goreleaser-action@v6
-        with:
-          version: v2.18.3
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
