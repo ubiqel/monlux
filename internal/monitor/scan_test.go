@@ -218,8 +218,7 @@ func TestSysfsEDIDAgrees(t *testing.T) {
 	monitorEDID := edidWith(1)
 	m := Monitor{I2CBus: 4, EDIDRaw: monitorEDID}
 
-	same := make([]byte, 128)
-	copy(same, monitorEDID[:])
+	same := slices.Clone(monitorEDID[:])
 
 	other := edidWith(2)
 
@@ -229,7 +228,7 @@ func TestSysfsEDIDAgrees(t *testing.T) {
 		want      bool
 	}{
 		{"same EDID", DRMConnector{EDID: same}, true},
-		{"same EDID with extension block", DRMConnector{EDID: append(same, 0xAA, 0xBB)}, true},
+		{"same EDID with extension block", DRMConnector{EDID: append(slices.Clone(same), 0xAA, 0xBB)}, true},
 		{"different EDID (stale link)", DRMConnector{EDID: other[:]}, false},
 		{"no sysfs EDID", DRMConnector{}, true},
 	}

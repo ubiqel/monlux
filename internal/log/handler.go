@@ -27,13 +27,18 @@ func (h *CliHandler) Handle(_ context.Context, r slog.Record) error {
 
 	var attrs strings.Builder
 	r.Attrs(func(a slog.Attr) bool {
-		attrs.WriteString(fmt.Sprintf(" %s=%v", a.Key, a.Value))
+		fmt.Fprintf(&attrs, " %s=%v", a.Key, a.Value)
+
 		return true
 	})
 
 	_, err := fmt.Fprintf(h.Out, "%s%s %s%s\n", timeStr, levelStr, r.Message, attrs.String())
-	return err
+	if err != nil {
+		return fmt.Errorf("writing log line: %w", err)
+	}
+
+	return nil
 }
 
-func (h *CliHandler) WithAttrs(attrs []slog.Attr) slog.Handler { return h }
-func (h *CliHandler) WithGroup(name string) slog.Handler       { return h }
+func (h *CliHandler) WithAttrs(_ []slog.Attr) slog.Handler { return h }
+func (h *CliHandler) WithGroup(_ string) slog.Handler      { return h }

@@ -1,6 +1,7 @@
 package brightness
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,7 +13,7 @@ import (
 func ParseCycleSteps(input string) (steps []uint, forwardCycle bool, err error) {
 	parts := strings.Split(input, ",")
 	if len(parts) <= 1 {
-		return nil, false, fmt.Errorf("invalid value format ")
+		return nil, false, errors.New("invalid value format ")
 	}
 
 	steps = make([]uint, 0, len(parts))
@@ -37,7 +38,7 @@ func ParseCycleSteps(input string) (steps []uint, forwardCycle bool, err error) 
 	forwardCycle = steps[1] > steps[0]
 	for i := 2; i < len(steps); i++ {
 		if forwardCycle && steps[i] < steps[i-1] || !forwardCycle && steps[i] > steps[i-1] {
-			return nil, false, fmt.Errorf("random ordering of steps is prohibited")
+			return nil, false, errors.New("random ordering of steps is prohibited")
 		}
 	}
 

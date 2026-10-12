@@ -154,7 +154,7 @@ func (h Host) isSMBusAdapter(bus int) bool {
 func (h Host) findDRMConnectors() ([]DRMConnector, error) {
 	entries, err := os.ReadDir(h.DRMPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading DRM path: %w", err)
 	}
 
 	connectors := make([]DRMConnector, 0)

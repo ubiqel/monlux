@@ -7,8 +7,6 @@ import (
 )
 
 func TestChecksumWrite(t *testing.T) {
-	is := is.New(t)
-
 	tests := []struct {
 		name     string
 		data     []byte
@@ -28,15 +26,13 @@ func TestChecksumWrite(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := checksumWrite(tt.data)
-			is.Equal(res, tt.expected)
+			is := is.New(t)
+			is.Equal(checksumWrite(tt.data), tt.expected)
 		})
 	}
 }
 
 func TestChecksumRead(t *testing.T) {
-	is := is.New(t)
-
 	tests := []struct {
 		name     string
 		data     []byte
@@ -61,8 +57,8 @@ func TestChecksumRead(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := checksumRead(tt.data)
-			is.Equal(res, tt.expected)
+			is := is.New(t)
+			is.Equal(checksumRead(tt.data), tt.expected)
 		})
 	}
 }

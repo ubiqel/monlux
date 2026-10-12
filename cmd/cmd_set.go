@@ -9,10 +9,10 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func runSetCmd(ctx context.Context, cmd *cli.Command) error {
+func runSetCmd(_ context.Context, cmd *cli.Command) error {
 	useCache := !cmd.Bool(noBrightnessCacheFlag)
 
-	return monitor.DefaultHost().WithDisplay(cmd.StringArg("DISPLAY"), func(fd int, m monitor.Monitor) error {
+	return monitor.DefaultHost().WithDisplay(cmd.StringArg(displayArg), func(fd int, m monitor.Monitor) error {
 		// Convert percent to real value (it's possible that max is not 100).
 		_, maximum, err := brightness.Current(fd, m, useCache)
 		if err != nil {

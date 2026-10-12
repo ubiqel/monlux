@@ -17,6 +17,8 @@ const cliName = "shine"
 
 const debugFlag = "debug"
 
+const displayArg = "DISPLAY"
+
 func main() {
 	logHandler := &log.CliHandler{
 		Out:  os.Stderr,
@@ -62,7 +64,7 @@ func main() {
 
 			return ctx, nil
 		},
-		After: func(ctx context.Context, c *cli.Command) error {
+		After: func(_ context.Context, _ *cli.Command) error {
 			defer stopProfiling()
 
 			if lck == nil {
@@ -80,7 +82,7 @@ func main() {
 			&cli.BoolFlag{
 				Name:  debugFlag,
 				Usage: "show debug information during command execution",
-				Action: func(ctx context.Context, c *cli.Command, debug bool) error {
+				Action: func(_ context.Context, _ *cli.Command, debug bool) error {
 					if !debug {
 						return nil
 					}
@@ -111,10 +113,10 @@ func main() {
 				Name:            "get",
 				Usage:           "Print brightness of a monitor as a percentage",
 				HideHelpCommand: true,
-				ArgsUsage:       "DISPLAY",
+				ArgsUsage:       displayArg,
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     "DISPLAY",
+						Name:     displayArg,
 						Required: true,
 					},
 				},
@@ -127,7 +129,7 @@ func main() {
 				ArgsUsage:       "DISPLAY PERCENT",
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     "DISPLAY",
+						Name:     displayArg,
 						Required: true,
 					},
 					&cli.UintArg{
@@ -144,7 +146,7 @@ func main() {
 				ArgsUsage:       "DISPLAY STEP",
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     "DISPLAY",
+						Name:     displayArg,
 						Required: true,
 					},
 					&cli.UintArg{
@@ -161,7 +163,7 @@ func main() {
 				ArgsUsage:       "DISPLAY STEP",
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     "DISPLAY",
+						Name:     displayArg,
 						Required: true,
 					},
 					&cli.UintArg{
@@ -175,10 +177,10 @@ func main() {
 				Name:            "cycle",
 				Usage:           "Cycle predefined steps",
 				HideHelpCommand: true,
-				ArgsUsage:       "DISPLAY",
+				ArgsUsage:       displayArg,
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name:     "DISPLAY",
+						Name:     displayArg,
 						Required: true,
 					},
 				},

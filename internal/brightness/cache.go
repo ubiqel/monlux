@@ -2,6 +2,7 @@ package brightness
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -96,7 +97,11 @@ func LoadCache() Cache {
 // SaveCache writes the cache. Commands that write hold the global lock, so
 // writes don't race with each other.
 func SaveCache(c Cache) error {
-	return cache.WriteJSON(cacheName, c)
+	if err := cache.WriteJSON(cacheName, c); err != nil {
+		return fmt.Errorf("writing brightness cache: %w", err)
+	}
+
+	return nil
 }
 
 // Fresh reports whether the value was read or written recently enough to use

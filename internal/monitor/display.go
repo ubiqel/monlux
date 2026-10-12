@@ -66,7 +66,7 @@ func (h Host) DPMSState(m Monitor) (state string, asleep bool) {
 // Resolve finds the single monitor that a DISPLAY argument names. The argument
 // is "<id>" (a DRM connector), or "<type>:<id>" with type drm, edid or i2c.
 func (h Host) Resolve(id string) (Monitor, error) {
-	displayId, displayIDType, err := parseDisplayID(id)
+	displayID, displayIDType, err := parseDisplayID(id)
 	if err != nil {
 		return Monitor{}, fmt.Errorf("parsing DISPLAY argument: %w", err)
 	}
@@ -79,16 +79,16 @@ func (h Host) Resolve(id string) (Monitor, error) {
 	for _, m := range monitors {
 		switch displayIDType {
 		case idTypeDRM:
-			if m.DRMConnector == nil || *m.DRMConnector != displayId {
+			if m.DRMConnector == nil || *m.DRMConnector != displayID {
 				continue
 			}
 		case idTypeEDID:
-			if m.EDIDIdentity != displayId {
+			if m.EDIDIdentity != displayID {
 				continue
 			}
 		case idTypeI2C:
 			// in this branch we just check that bus exists.
-			if strconv.Itoa(m.I2CBus) != displayId {
+			if strconv.Itoa(m.I2CBus) != displayID {
 				continue
 			}
 		default:
@@ -114,7 +114,7 @@ func (h Host) Resolve(id string) (Monitor, error) {
 
 		return Monitor{}, fmt.Errorf(
 			"display '%s' matches %d monitors (buses %v); select one with 'i2c:<bus>'",
-			displayId, len(matches), buses,
+			displayID, len(matches), buses,
 		)
 	}
 }

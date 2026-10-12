@@ -25,27 +25,32 @@ type I2CRdwrIoctlData struct {
 }
 
 const (
-	I2C_M_RD = uint16(0x0001)
-	I2C_RDWR = uint32(0x0707)
+	i2cMRead     = uint16(0x0001)
+	ioctlI2CRdwr = uint32(0x0707)
 )
 
 const (
-	DDC_ADDR  = uint16(0x37)
-	EDID_ADDR = uint16(0x50)
+	ddcAddr  = uint16(0x37)
+	edidAddr = uint16(0x50)
 )
 
-const VCP_BRIGHTNESS = byte(0x10)
+const vcpBrightness = byte(0x10)
 
 // DDC/CI is occasionally flaky (the monitor sometimes answers the previous
 // request), so reads/writes are retried a couple of times with a short delay.
 const (
-	VCP_RETRIES     = 3
-	VCP_RETRY_DELAY = 40 * time.Millisecond
+	vcpRetries    = 3
+	vcpRetryDelay = 40 * time.Millisecond
 )
 
 // Open opens /dev/i2c-N for DDC/CI and EDID access. The caller closes the fd.
 func Open(bus int) (int, error) {
-	return unix.Open(fmt.Sprintf("/dev/i2c-%d", bus), unix.O_RDWR, 0)
+	fd, err := unix.Open(fmt.Sprintf("/dev/i2c-%d", bus), unix.O_RDWR, 0)
+	if err != nil {
+		return 0, fmt.Errorf("opening /dev/i2c-%d: %w", bus, err)
+	}
+
+	return fd, nil
 }
 
 func ReadEdid(fd int) ([128]byte, error) {
@@ -53,14 +58,14 @@ func ReadEdid(fd int) ([128]byte, error) {
 	off := [1]byte{0x00}
 	msgs := [2]I2CMsg{
 		{
-			Addr:  EDID_ADDR,
+			Addr:  edidAddr,
 			Flags: 0,
 			Len:   1,
 			Buf:   &off[0],
 		},
 		{
-			Addr:  EDID_ADDR,
-			Flags: I2C_M_RD,
+			Addr:  edidAddr,
+			Flags: i2cMRead,
 			Len:   128,
 			Buf:   &edid[0],
 		},
@@ -73,14 +78,15 @@ func ReadEdid(fd int) ([128]byte, error) {
 	return edid, nil
 }
 
-// Brightness as a percentage (0-100), plus the raw values for callers that set.
+// ReadBrightness returns the brightness as a percentage (0-100), plus the raw
+// values for callers that set.
 func ReadBrightness(fd int) (percent int, raw, maximum uint16, err error) {
-	val, e := getVcp(fd, VCP_BRIGHTNESS)
+	val, e := getVcp(fd, vcpBrightness)
 	if e != nil {
 		return 0, 0, 0, fmt.Errorf("get_vcp: %w", e)
 	}
 	if val.maximum == 0 {
-		return 0, 0, 0, fmt.Errorf("io error")
+		return 0, 0, 0, errors.New("io error")
 	}
 
 	return int(val.current) * 100 / int(val.maximum),
@@ -92,19 +98,20 @@ func ReadBrightness(fd int) (percent int, raw, maximum uint16, err error) {
 // ProbeDDC reports whether the monitor answers DDC/CI on this bus. A monitor
 // that rejects only the brightness feature still answers DDC/CI, so it counts.
 func ProbeDDC(fd int) bool {
-	_, err := getVcp(fd, VCP_BRIGHTNESS)
+	_, err := getVcp(fd, vcpBrightness)
 
 	return err == nil || errors.Is(err, ErrUnsupportedFeature)
 }
 
 func SetBrightness(fd int, value uint16) error {
 	slog.Debug("Setting new brightness value via i2c", "value", value)
-	return setVcp(fd, VCP_BRIGHTNESS, value)
+
+	return setVcp(fd, vcpBrightness, value)
 }
 
 func setVcp(fd int, code byte, value uint16) error {
 	var err error
-	for attempt := range VCP_RETRIES {
+	for attempt := range vcpRetries {
 		err = setVcpOnce(fd, code, value)
 		if err == nil {
 			return nil
@@ -112,9 +119,9 @@ func setVcp(fd int, code byte, value uint16) error {
 		slog.Debug("SetVCP request failed", "error", err, "vcp_code", code)
 
 		// No point sleeping once the final attempt has been made.
-		if attempt < VCP_RETRIES-1 {
+		if attempt < vcpRetries-1 {
 			slog.Debug("SetVCP sleep before next retry")
-			time.Sleep(VCP_RETRY_DELAY)
+			time.Sleep(vcpRetryDelay)
 		}
 	}
 
@@ -127,8 +134,8 @@ func setVcpOnce(fd int, code byte, value uint16) error {
 
 	var reply [6]byte
 	msgs := [2]I2CMsg{
-		{Addr: DDC_ADDR, Flags: 0, Len: 7, Buf: &req[0]},
-		{Addr: DDC_ADDR, Flags: I2C_M_RD, Len: 6, Buf: &reply[0]},
+		{Addr: ddcAddr, Flags: 0, Len: 7, Buf: &req[0]},
+		{Addr: ddcAddr, Flags: i2cMRead, Len: 6, Buf: &reply[0]},
 	}
 	if err := i2cRdwr(fd, msgs[:]); err != nil {
 		return err
@@ -137,15 +144,15 @@ func setVcpOnce(fd int, code byte, value uint16) error {
 	// Set replies vary between monitors: parse the DDC/CI length byte rather
 	// than assuming a fixed frame. Some firmwares ACK with a zero-length
 	// message (no opcode), others echo opcode 0x04 and a result.
-	data_len := int(reply[1] & 0x7F)
-	total := 2 + data_len + 1 // source + length + data + checksum
+	dataLen := int(reply[1] & 0x7F)
+	total := 2 + dataLen + 1 // source + length + data + checksum
 	if total > len(reply) {
 		return errors.New("io error")
 	}
 	if checksumRead(reply[:total-1]) != reply[total-1] {
 		return errors.New("io error")
 	}
-	if data_len >= 1 && reply[2] != 0x04 { // Set VCP reply opcode
+	if dataLen >= 1 && reply[2] != 0x04 { // Set VCP reply opcode
 		return errors.New("io error")
 	}
 
@@ -168,7 +175,7 @@ var ErrUnsupportedFeature = errors.New("VCP feature not supported")
 var errVCPError = errors.New("VCP error")
 
 func getVcp(fd int, code byte) (val VcpValue, err error) {
-	for attempt := range VCP_RETRIES {
+	for attempt := range vcpRetries {
 		val, err = getVcpOnce(fd, code)
 		if err == nil {
 			return val, nil
@@ -181,9 +188,9 @@ func getVcp(fd int, code byte) (val VcpValue, err error) {
 		}
 
 		// No point sleeping once the final attempt has been made.
-		if attempt < VCP_RETRIES-1 {
+		if attempt < vcpRetries-1 {
 			slog.Debug("GetVCP sleep before next retry")
-			time.Sleep(VCP_RETRY_DELAY)
+			time.Sleep(vcpRetryDelay)
 		}
 	}
 
@@ -197,14 +204,14 @@ func getVcpOnce(fd int, code byte) (val VcpValue, err error) {
 	var reply [11]byte
 	msgs := [2]I2CMsg{
 		{
-			Addr:  DDC_ADDR,
+			Addr:  ddcAddr,
 			Flags: 0,
 			Len:   5,
 			Buf:   &req[0],
 		},
 		{
-			Addr:  DDC_ADDR,
-			Flags: I2C_M_RD,
+			Addr:  ddcAddr,
+			Flags: i2cMRead,
 			Len:   11,
 			Buf:   &reply[0],
 		},
@@ -214,10 +221,10 @@ func getVcpOnce(fd int, code byte) (val VcpValue, err error) {
 	}
 
 	if checksumRead(reply[:10]) != reply[10] {
-		return VcpValue{}, fmt.Errorf("invalid checksum")
+		return VcpValue{}, errors.New("invalid checksum")
 	}
 	if reply[2] != 0x02 || reply[4] != code { // get reply, right code
-		return VcpValue{}, fmt.Errorf("invalid reply")
+		return VcpValue{}, errors.New("invalid reply")
 	}
 	// reply[3] is the DDC/CI result code: 0x00 means no error while 0x01 means
 	// the requested VCP feature is unsupported. The latter is a definitive
@@ -241,7 +248,8 @@ func i2cRdwr(fd int, msgs []I2CMsg) error {
 		Msgs:  &msgs[0],
 		NMsgs: uint32(len(msgs)),
 	}
-	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), uintptr(I2C_RDWR), uintptr(unsafe.Pointer(&data)))
+	//nolint:gosec // G103: the ioctl needs the raw pointer to the request struct
+	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), uintptr(ioctlI2CRdwr), uintptr(unsafe.Pointer(&data)))
 	if errno != 0 {
 		return fmt.Errorf("running ioctl syscall: %w", errno)
 	}

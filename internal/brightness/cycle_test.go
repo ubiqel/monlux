@@ -63,7 +63,6 @@ func TestNextCycleTargetForward(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			is := is.New(t)
-
 			is.Equal(NextCycleTarget(tt.curr, steps, true), tt.want)
 		})
 	}
@@ -88,7 +87,6 @@ func TestNextCycleTargetBackward(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			is := is.New(t)
-
 			is.Equal(NextCycleTarget(tt.curr, steps, false), tt.want)
 		})
 	}

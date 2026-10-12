@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func runListCmd(ctx context.Context, cmd *cli.Command) error {
+func runListCmd(_ context.Context, _ *cli.Command) error {
 	host := monitor.DefaultHost()
 	monitors := host.Monitors()
 
@@ -29,13 +29,10 @@ func runListCmd(ctx context.Context, cmd *cli.Command) error {
 	// end up sequential (lock inside driver). For example, it happens on
 	// Nvidia card with two monitors connected. On my machine sequential and
 	// parallel implementation perform the same so i've kept parallel version.
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
 	rows := make([]row, len(monitors))
 	for i, m := range monitors {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			r := row{
 				drm:  "-",
 				i2c:  fmt.Sprintf("/dev/i2c-%d", m.I2CBus),
@@ -55,7 +52,7 @@ func runListCmd(ctx context.Context, cmd *cli.Command) error {
 			}
 
 			pct, _, _, err := i2c.ReadBrightness(fd)
-			unix.Close(fd)
+			_ = unix.Close(fd)
 			switch _, asleep := host.DPMSState(m); {
 			case err == nil:
 				r.brightness = fmt.Sprintf("%d%%", pct)
@@ -65,7 +62,7 @@ func runListCmd(ctx context.Context, cmd *cli.Command) error {
 				r.brightness = "?"
 			}
 			rows[i] = r
-		}()
+		})
 	}
 	wg.Wait()
 

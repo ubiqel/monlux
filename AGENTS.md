@@ -13,9 +13,12 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 - `task deps`: `go mod tidy` + `go mod vendor`. It needs network. `vendor/` is committed and used (`modules-download-mode: vendor`), so after any dependency change re-vendor and commit `vendor/`.
 - `go run ./cmd --debug <subcommand>` runs with debug logging and writes CPU profile and trace files to `$XDG_CACHE_HOME/shine/debug/` (`os.UserCacheDir`).
 
-## Current lint state
+## Lint state
 
-`golangci-lint run ./...` already fails on the existing tree (about 120 findings, mostly `paralleltest`, `forbidigo`, `revive`, `gosec`, `wrapcheck`, `nonamedreturns`). `gofumpt -l -extra` also flags `internal/profile/profile.go`. Don't fix these unprompted. Judge your change by whether it adds new findings.
+`golangci-lint run ./...` and `gofumpt --extra -l cmd internal` are both clean. Keep them that way: fix new findings in your change rather than suppressing them.
+
+- Project-wide exclusions live in `.golangci.yaml`: `paralleltest` and `nonamedreturns` are disabled, `funlen` is excluded for `cmd/main.go`, `forbidigo` for `cmd/`, and gosec G304 and G115 everywhere.
+- Use an inline `//nolint:<linter> // reason` only for a single, isolated case (e.g. G103 on the ioctl call). If a pattern repeats, add a config exclusion instead.
 
 ## Layout
 
@@ -51,5 +54,6 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 - **Failures on a sleeping display.** `Host.WithDisplay` reports DPMS "asleep" when a DDC operation fails. Check the display state before debugging the I2C code.
 - **Hardware is injected through `monitor.Host`.** It holds the sysfs paths (`DRMPath`, `I2CSysPath`, `DevPath`) and the hardware hooks (`ReadEDID`, `ProbeDDC`). Production code uses `monitor.DefaultHost()`. There are no package globals to swap.
 - **Tests never touch real hardware.** `internal/monitor/fixture_test.go` (`installFixture`) builds a fake sysfs and `/dev` tree in a temp dir and returns a `Host` wired to fake buses. Keep new tests hermetic the same way. Brightness tests pass a `-1` fd, so any real I/O fails.
-- **Cache tests isolate the cache.** Call `t.Setenv("XDG_CACHE_HOME", t.TempDir())` yourself. `installFixture` doesn't set it.
+- **Cache tests isolate the cache.** Call `t.Setenv("XDG_CACHE_HOME", t.TempDir())` yourself. `installFixture` doesn't set it. `t.Setenv` panics if the test or any parent calls `t.Parallel()`, so tests that touch the cache must stay sequential (see `isolateCache` in `internal/brightness/cache_test.go`).
+- **Tests run serially by default.** Most tests finish in well under a millisecond, so `t.Parallel()` only adds noise. Add it only when a test blocks for a long time (e.g. sleeps or real I/O waits) and no shared state or `t.Setenv` is involved.
 - Tests use `github.com/matryer/is`.

@@ -30,6 +30,8 @@ linters:
     - wsl
     - wsl_v5
     - gochecknoglobals
+    - paralleltest
+    - nonamedreturns
 
     # other
     - godox
@@ -68,6 +70,22 @@ linters:
     - text: 'exported: .+'
       linters:
         - revive
+    - path: cmd/main\.go
+      linters:
+        - funlen
+    - path: cmd/
+      linters:
+        - forbidigo
+    # Command errors are already descriptive, so they are returned as-is.
+    - path: cmd/
+      linters:
+        - wrapcheck
+    - text: 'G304:'
+      linters:
+        - gosec
+    - text: 'G115:'
+      linters:
+        - gosec
     - path: _test\.go
       linters:
         - gosec

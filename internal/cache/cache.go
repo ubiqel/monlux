@@ -27,7 +27,7 @@ func Path(name string) (string, error) {
 		return "", fmt.Errorf("resolving user cache dir location: %w", err)
 	}
 	appCacheDir := filepath.Join(cacheDir, appDirName)
-	err = os.MkdirAll(appCacheDir, 0o755)
+	err = os.MkdirAll(appCacheDir, 0o750)
 	if err != nil {
 		return "", fmt.Errorf("creating app cache dir: %w", err)
 	}
@@ -75,7 +75,7 @@ func WriteJSON(name string, v any) error {
 		return fmt.Errorf("marshalling to json: %w", err)
 	}
 
-	if err := os.WriteFile(path, content, 0o644); err != nil {
+	if err := os.WriteFile(path, content, 0o600); err != nil {
 		return fmt.Errorf("writing cache file: %w", err)
 	}
 

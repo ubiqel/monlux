@@ -25,12 +25,14 @@ func Acquire() (Lock, error) {
 	// EPERM just means another user created the file first.
 	if err := unix.Fchmod(fd, 0o666); err != nil && !errors.Is(err, unix.EPERM) {
 		_ = unix.Close(fd)
+
 		return 0, fmt.Errorf("setting lock file mode: %w", err)
 	}
 
 	err = unix.Flock(fd, unix.LOCK_EX)
 	if err != nil {
 		_ = unix.Close(fd)
+
 		return 0, fmt.Errorf("acquiring lock with flock: %w", err)
 	}
 

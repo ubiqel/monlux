@@ -9,10 +9,10 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func runDownCmd(ctx context.Context, cmd *cli.Command) error {
+func runDownCmd(_ context.Context, cmd *cli.Command) error {
 	useCache := !cmd.Bool(noBrightnessCacheFlag)
 
-	return monitor.DefaultHost().WithDisplay(cmd.StringArg("DISPLAY"), func(fd int, m monitor.Monitor) error {
+	return monitor.DefaultHost().WithDisplay(cmd.StringArg(displayArg), func(fd int, m monitor.Monitor) error {
 		currPct, maximum, err := brightness.Current(fd, m, useCache)
 		if err != nil {
 			return fmt.Errorf("reading brightness from i2c bus '%v': %w", m.I2CBus, err)

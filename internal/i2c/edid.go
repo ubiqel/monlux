@@ -23,15 +23,15 @@ func ParseIdentity(edid []byte) (identity string, ok bool) {
 		}
 	}
 
-	mfg_id := uint16(edid[8])<<8 | uint16(edid[9])
+	mfgID := uint16(edid[8])<<8 | uint16(edid[9])
 	mfg := [3]byte{
-		byte(((mfg_id >> 10) & 0x1F) + uint16('A') - 1),
-		byte(((mfg_id >> 5) & 0x1F) + uint16('A') - 1),
-		byte((mfg_id & 0x1F) + uint16('A') - 1),
+		byte(((mfgID >> 10) & 0x1F) + uint16('A') - 1),
+		byte(((mfgID >> 5) & 0x1F) + uint16('A') - 1),
+		byte((mfgID & 0x1F) + uint16('A') - 1),
 	}
 
 	product := uint32(edid[10]) | uint32(edid[11])<<8
-	serial_num :=
+	serialNum :=
 		uint32(edid[12]) |
 			uint32(edid[13])<<8 |
 			uint32(edid[14])<<16 |
@@ -39,8 +39,8 @@ func ParseIdentity(edid []byte) (identity string, ok bool) {
 
 	var name string
 	var serial string
-	var name_buf [16]byte
-	var serial_buf [16]byte
+	var nameBuf [16]byte
+	var serialBuf [16]byte
 
 	for base := 54; base <= 108; base += 18 {
 		if base+18 > len(edid) {
@@ -51,20 +51,20 @@ func ParseIdentity(edid []byte) (identity string, ok bool) {
 		}
 		switch edid[base+3] {
 		case 0xFC:
-			name = descriptor_text(edid[base+5 : base+18])
+			name = descriptorText(edid[base+5 : base+18])
 		case 0xFF:
-			serial = descriptor_text(edid[base+5 : base+18])
+			serial = descriptorText(edid[base+5 : base+18])
 		}
 	}
 
 	if name == "" {
-		name = string(fmt.Appendf(name_buf[:0], "%04X", product))
+		name = string(fmt.Appendf(nameBuf[:0], "%04X", product))
 	}
 	if serial == "" {
-		if serial_num != 0 {
-			serial = string(fmt.Appendf(serial_buf[:0], "%d", serial_num))
+		if serialNum != 0 {
+			serial = string(fmt.Appendf(serialBuf[:0], "%d", serialNum))
 		} else {
-			serial = string(fmt.Appendf(serial_buf[:0], "%04X", product))
+			serial = string(fmt.Appendf(serialBuf[:0], "%04X", product))
 		}
 	}
 
@@ -76,14 +76,15 @@ func ParseIdentity(edid []byte) (identity string, ok bool) {
 }
 
 // Trim trailing spaces, newlines and NULs from a 13-byte EDID descriptor field.
-func descriptor_text(raw []byte) string {
+func descriptorText(raw []byte) string {
 	end := len(raw)
 	for end > 0 {
 		c := raw[end-1]
 		if c != ' ' && c != 0x0A && c != 0x00 {
 			break
 		}
-		end -= 1
+		end--
 	}
+
 	return string(raw[:end])
 }

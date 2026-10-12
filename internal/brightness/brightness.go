@@ -4,6 +4,7 @@ package brightness
 
 import (
 	"cmp"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -23,7 +24,7 @@ func Current(fd int, m monitor.Monitor, useCache bool) (pct int, maximum uint16,
 
 	pct, raw, maximum, err := i2c.ReadBrightness(fd)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("reading brightness via i2c: %w", err)
 	}
 
 	if useCache {
@@ -41,7 +42,7 @@ func Write(fd int, m monitor.Monitor, raw, maximum uint16, useCache bool) error 
 			Forget(m.I2CBus)
 		}
 
-		return err
+		return fmt.Errorf("writing brightness via i2c: %w", err)
 	}
 
 	if useCache {

@@ -69,7 +69,12 @@ func readEDIDFromBus(bus int) ([128]byte, error) {
 	}
 	defer unix.Close(fd)
 
-	return i2c.ReadEdid(fd)
+	edid, err := i2c.ReadEdid(fd)
+	if err != nil {
+		return [128]byte{}, fmt.Errorf("reading EDID: %w", err)
+	}
+
+	return edid, nil
 }
 
 func probeDDCOnBus(bus int) bool {

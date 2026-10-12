@@ -8,7 +8,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func runDetectCmd(ctx context.Context, cmd *cli.Command) error {
+func runDetectCmd(_ context.Context, _ *cli.Command) error {
 	res := monitor.DefaultHost().Scan()
 
 	if len(res.Buses) == 0 {

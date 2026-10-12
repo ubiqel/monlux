@@ -14,7 +14,6 @@ func isolateCache(t *testing.T) {
 }
 
 func TestEntryFresh(t *testing.T) {
-	is := is.New(t)
 	now := time.Now()
 
 	tests := []struct {
