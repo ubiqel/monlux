@@ -41,7 +41,7 @@ snapshot:
 changelog:
   sort: asc
   abbrev: 7
-  format: "- {{ .Message }} ({{ .SHA }})"
+  format: "{{ .Message }} ({{ .SHA }})"
   filters:
     exclude:
       - "Merge pull request"
