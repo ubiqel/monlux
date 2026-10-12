@@ -117,6 +117,7 @@ func main() {
 						Required: true,
 					},
 				},
+				Flags:  []cli.Flag{noBrightnessCacheFlagDef()},
 				Action: runGetCmd,
 			}, {
 				Name:            "set",
@@ -133,6 +134,7 @@ func main() {
 						Required: true,
 					},
 				},
+				Flags:  []cli.Flag{noBrightnessCacheFlagDef()},
 				Action: runSetCmd,
 			}, {
 				Name:            "up",
@@ -149,6 +151,7 @@ func main() {
 						Required: true,
 					},
 				},
+				Flags:  []cli.Flag{noBrightnessCacheFlagDef()},
 				Action: runUpCmd,
 			}, {
 				Name:            "down",
@@ -165,6 +168,7 @@ func main() {
 						Required: true,
 					},
 				},
+				Flags:  []cli.Flag{noBrightnessCacheFlagDef()},
 				Action: runDownCmd,
 			}, {
 				Name:            "cycle",
@@ -183,6 +187,7 @@ func main() {
 						Usage: "brightness steps to cycle through",
 						Value: "0,50,100",
 					},
+					noBrightnessCacheFlagDef(),
 				},
 				Action: runCycleCmd,
 			},

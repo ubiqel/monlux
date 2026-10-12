@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ubiqel/shine/internal/i2c"
 	"github.com/urfave/cli/v3"
 )
 
@@ -16,16 +15,18 @@ func runCycleCmd(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("parsing \"--steps\" flag: %w", err)
 	}
 
-	return withDisplay(cmd.StringArg("DISPLAY"), func(fd int, bus int) error {
-		currPct, _, rawMaximum, err := i2c.ReadBrightness(fd)
+	useCache := !cmd.Bool(noBrightnessCacheFlag)
+
+	return withDisplay(cmd.StringArg("DISPLAY"), func(fd int, m Monitor) error {
+		currPct, rawMaximum, err := currentBrightness(fd, m, useCache)
 		if err != nil {
-			return fmt.Errorf("reading brightness from i2c bus '%v': %w", bus, err)
+			return fmt.Errorf("reading brightness from i2c bus '%v': %w", m.I2CBus, err)
 		}
 
 		targetPct := findNextCycleTarget(uint(currPct), cycleSteps, forwardCycle)
 		rawTarget := uint16(uint(rawMaximum) * targetPct / 100)
-		if err := i2c.SetBrightness(fd, rawTarget); err != nil {
-			return fmt.Errorf("setting new brightness value via i2c bus '%v': %w", bus, err)
+		if err := writeBrightness(fd, m, rawTarget, rawMaximum, useCache); err != nil {
+			return fmt.Errorf("setting new brightness value via i2c bus '%v': %w", m.I2CBus, err)
 		}
 
 		return nil

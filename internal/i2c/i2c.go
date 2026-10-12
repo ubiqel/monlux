@@ -69,7 +69,7 @@ func ReadEdid(fd int) ([128]byte, error) {
 }
 
 // Brightness as a percentage (0-100), plus the raw values for callers that set.
-func ReadBrightness(fd int) (percent int, raw, maximum uint16, err error) { // TODO: i don't like this func. refactor.
+func ReadBrightness(fd int) (percent int, raw, maximum uint16, err error) {
 	val, e := getVcp(fd, VCP_BRIGHTNESS)
 	if e != nil {
 		return 0, 0, 0, fmt.Errorf("get_vcp: %w", e)
@@ -135,7 +135,7 @@ func setVcpOnce(fd int, code byte, value uint16) error {
 	data_len := int(reply[1] & 0x7F)
 	total := 2 + data_len + 1 // source + length + data + checksum
 	if total > len(reply) {
-		return errors.New("io error") // TODO: create global var for error
+		return errors.New("io error")
 	}
 	if checksumRead(reply[:total-1]) != reply[total-1] {
 		return errors.New("io error")

@@ -2,10 +2,15 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ubiqel/shine/internal/i2c"
 	"golang.org/x/sys/unix"
@@ -17,11 +22,18 @@ var (
 	probeDDC = probeDDCOnBus
 )
 
+const cacheTTL = 60 * time.Second
+
+type MonitorsCache struct {
+	Monitors  []Monitor `json:"monitors"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type Monitor struct {
-	I2CBus       int
-	EDIDIdentity string
-	EDIDRaw      [128]byte
-	DRMConnector *string
+	I2CBus       int       `json:"i2c_bus"`
+	EDIDIdentity string    `json:"edid_identity"`
+	EDIDRaw      [128]byte `json:"edid_raw"`
+	DRMConnector *string   `json:"drm_connector,omitempty"`
 }
 
 // BusReport records what a scan found on one candidate I2C bus. There is one
@@ -47,12 +59,103 @@ type ScanResult struct {
 }
 
 func scanMonitors() []Monitor {
-	return scan().Monitors
+	cached, err := readMonitorsCache()
+	switch {
+	case err == nil:
+		if age := time.Since(cached.UpdatedAt); age >= 0 && age <= cacheTTL {
+			return cached.Monitors
+		}
+	case errors.Is(err, ErrNoCache):
+	default:
+		slog.Warn("Failed to read monitors cache, scanning instead.", "error", err)
+	}
+
+	monitors := scan().Monitors
+	if len(monitors) == 0 {
+		return monitors
+	}
+
+	if err := writeMonitorsCache(monitors); err != nil {
+		slog.Warn("Failed to save monitors cache.", "error", err)
+	}
+
+	return monitors
+}
+
+var ErrNoCache = errors.New("no cache file exists")
+
+func readMonitorsCache() (MonitorsCache, error) {
+	cacheFilepath, err := resolveMonitorsCacheLocation()
+	if err != nil {
+		return MonitorsCache{}, err
+	}
+
+	content, err := os.ReadFile(cacheFilepath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return MonitorsCache{}, ErrNoCache
+		}
+
+		return MonitorsCache{}, fmt.Errorf("reading cache file: %w", err)
+	}
+
+	var cache MonitorsCache
+	err = json.Unmarshal(content, &cache)
+	if err != nil {
+		slog.Warn("Failed to unmarshal cache file content as JSON.", "error", err)
+		if err := os.Remove(cacheFilepath); err != nil {
+			slog.Warn("Failed to remove file with corrupted cache.", "error", err, "cache_filepath", cacheFilepath)
+		}
+
+		return MonitorsCache{}, ErrNoCache
+	}
+
+	return cache, nil
+}
+
+func writeMonitorsCache(monitors []Monitor) error {
+	cacheFilepath, err := resolveMonitorsCacheLocation()
+	if err != nil {
+		return err
+	}
+
+	cache := MonitorsCache{
+		Monitors:  monitors,
+		UpdatedAt: time.Now(),
+	}
+
+	content, err := json.Marshal(cache)
+	if err != nil {
+		return fmt.Errorf("marshalling to json: %w", err)
+	}
+
+	err = os.WriteFile(cacheFilepath, content, 0o644)
+	if err != nil {
+		return fmt.Errorf("writing cache file: %w", err)
+	}
+
+	return nil
+}
+
+func resolveMonitorsCacheLocation() (string, error) {
+	return resolveCacheFile("monitors.json")
+}
+
+func resolveCacheFile(name string) (string, error) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("resolving user cache dir location: %w", err)
+	}
+	appCacheDir := filepath.Join(cacheDir, cliName)
+	err = os.MkdirAll(appCacheDir, 0o755)
+	if err != nil {
+		return "", fmt.Errorf("creating app cache dir: %w", err)
+	}
+
+	return filepath.Join(appCacheDir, name), nil
 }
 
 func scan() ScanResult {
-	// TODO: cache
-
 	// Discover DRM connectors first. Their status (when trusted) and (when
 	// available) DDC/I2C mapping tell us which buses are worth probing, so we
 	// avoid touching buses whose connectors are disconnected. Reads on those

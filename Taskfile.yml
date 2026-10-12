@@ -33,4 +33,9 @@ tasks:
   build.debug:
     desc: Build debug version of binary.
     cmds:
-      - go build -gcflags="all=-N -l" -o ./build/shine ./cmd/*.go
+      - CGO_ENABLED=0 go build -gcflags="all=-N -l" -o ./build/shine ./cmd
+
+  build.release:
+    desc: Build debug version of binary.
+    cmds:
+      - CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ./build/shine ./cmd

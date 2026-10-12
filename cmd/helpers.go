@@ -20,9 +20,10 @@ const (
 )
 
 // withDisplay resolves a DISPLAY argument, opens its I2C bus and runs fn with
-// the fd. The fd is always closed. If fn fails while the display is asleep, the
-// error says so, since a sleeping display is the usual reason DDC/CI fails.
-func withDisplay(id string, fn func(fd int, bus int) error) error {
+// the fd and the monitor. The fd is always closed. If fn fails while the display
+// is asleep, the error says so, since a sleeping display is the usual reason
+// DDC/CI fails.
+func withDisplay(id string, fn func(fd int, m Monitor) error) error {
 	m, err := resolveDisplay(id)
 	if err != nil {
 		return err
@@ -34,7 +35,7 @@ func withDisplay(id string, fn func(fd int, bus int) error) error {
 	}
 	defer unix.Close(fd)
 
-	if err := fn(fd, m.I2CBus); err != nil {
+	if err := fn(fd, m); err != nil {
 		if state, asleep := dpmsState(m); asleep {
 			return fmt.Errorf("display is asleep (DPMS %s): %w", state, err)
 		}

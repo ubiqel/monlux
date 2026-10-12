@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/matryer/is"
 )
 
 // fxGPU is a GPU in a fixture tree.
@@ -151,38 +153,33 @@ func installFixture(t *testing.T, fx fixture) *[]int {
 func mustMkdir(t *testing.T, path string) {
 	t.Helper()
 
-	if err := os.MkdirAll(path, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	is := is.New(t)
+	is.NoErr(os.MkdirAll(path, 0o755))
 }
 
 func mustWrite(t *testing.T, path string, data []byte) {
 	t.Helper()
 
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	is := is.New(t)
+	is.NoErr(os.WriteFile(path, data, 0o644))
 }
 
 func mustSymlink(t *testing.T, target, link string) {
 	t.Helper()
 
-	if err := os.Symlink(target, link); err != nil {
-		t.Fatal(err)
-	}
+	is := is.New(t)
+	is.NoErr(os.Symlink(target, link))
 }
 
 // reportFor returns the report for a bus, failing the test if there is none.
-func reportFor(t *testing.T, res ScanResult, bus int) BusReport {
-	t.Helper()
-
+func reportFor(is *is.I, res ScanResult, bus int) BusReport {
 	for _, r := range res.Buses {
 		if r.Bus == bus {
 			return r
 		}
 	}
 
-	t.Fatalf("no report for bus %d", bus)
+	is.Fail() // no report for this bus
 
 	return BusReport{}
 }
@@ -206,7 +203,7 @@ func TestScanFixtures(t *testing.T) {
 	tests := []struct {
 		name  string
 		fx    fixture
-		check func(t *testing.T, res ScanResult, reads []int)
+		check func(is *is.I, res ScanResult, reads []int)
 	}{
 		{
 			name: "AMD with direct DDC links",
@@ -221,17 +218,16 @@ func TestScanFixtures(t *testing.T) {
 					5: {edid: edidB, ddc: true},
 				},
 			},
-			check: func(t *testing.T, res ScanResult, _ []int) {
-				if got := monitorBuses(res); !slices.Equal(got, []int{4, 5}) {
-					t.Fatalf("monitor buses = %v, want [4 5]", got)
-				}
-				r := reportFor(t, res, 4)
-				if r.Connector != "card0-DP-2" || r.Link != "ddc" || r.Sysfs != "match" || r.Result != "monitor" {
-					t.Errorf("bus 4 report = %+v", r)
-				}
-				if len(res.Unlinked) != 0 {
-					t.Errorf("unlinked = %v, want none", res.Unlinked)
-				}
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(monitorBuses(res), []int{4, 5})
+
+				r := reportFor(is, res, 4)
+				is.Equal(r.Connector, "card0-DP-2")
+				is.Equal(r.Link, "ddc")
+				is.Equal(r.Sysfs, "match")
+				is.Equal(r.Result, "monitor")
+
+				is.Equal(len(res.Unlinked), 0)
 			},
 		},
 		{
@@ -247,13 +243,12 @@ func TestScanFixtures(t *testing.T) {
 					5: {edid: edidB, ddc: true},
 				},
 			},
-			check: func(t *testing.T, res ScanResult, _ []int) {
-				if got := monitorBuses(res); !slices.Equal(got, []int{4, 5}) {
-					t.Fatalf("monitor buses = %v, want [4 5]", got)
-				}
-				if r := reportFor(t, res, 4); r.Connector != "card1-DP-2" || r.Link != "edid" {
-					t.Errorf("bus 4 report = %+v, want DP-2 linked by edid", r)
-				}
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(monitorBuses(res), []int{4, 5})
+
+				r := reportFor(is, res, 4)
+				is.Equal(r.Connector, "card1-DP-2")
+				is.Equal(r.Link, "edid")
 			},
 		},
 		{
@@ -265,13 +260,13 @@ func TestScanFixtures(t *testing.T) {
 				},
 				buses: map[int]fxBus{4: {edid: edidA, ddc: false}},
 			},
-			check: func(t *testing.T, res ScanResult, _ []int) {
-				if len(res.Monitors) != 0 {
-					t.Fatalf("monitors = %v, want none", monitorBuses(res))
-				}
-				if r := reportFor(t, res, 4); !r.Probed || r.DDC || r.Result != "EDID only, DDC/CI not answering" {
-					t.Errorf("bus 4 report = %+v", r)
-				}
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(len(res.Monitors), 0)
+
+				r := reportFor(is, res, 4)
+				is.True(r.Probed)
+				is.Equal(r.DDC, false)
+				is.Equal(r.Result, "EDID only, DDC/CI not answering")
 			},
 		},
 		{
@@ -283,13 +278,13 @@ func TestScanFixtures(t *testing.T) {
 				},
 				buses: map[int]fxBus{4: {edid: edidA, ddc: true}},
 			},
-			check: func(t *testing.T, res ScanResult, _ []int) {
-				if len(res.Monitors) != 0 {
-					t.Fatalf("monitors = %v, want none", monitorBuses(res))
-				}
-				if r := reportFor(t, res, 4); !r.Panel || r.Probed || r.Result != "internal panel, no DDC/CI" {
-					t.Errorf("bus 4 report = %+v", r)
-				}
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(len(res.Monitors), 0)
+
+				r := reportFor(is, res, 4)
+				is.True(r.Panel)
+				is.Equal(r.Probed, false)
+				is.Equal(r.Result, "internal panel, no DDC/CI")
 			},
 		},
 		{
@@ -304,13 +299,11 @@ func TestScanFixtures(t *testing.T) {
 					5: {edid: edidA, ddc: false},
 				},
 			},
-			check: func(t *testing.T, res ScanResult, _ []int) {
-				if got := monitorBuses(res); !slices.Equal(got, []int{4}) {
-					t.Fatalf("monitor buses = %v, want [4]", got)
-				}
-				if m := res.Monitors[0]; m.DRMConnector == nil || *m.DRMConnector != "card1-DP-2" {
-					t.Errorf("real monitor lost its connector: %v", m.DRMConnector)
-				}
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(monitorBuses(res), []int{4})
+
+				m := res.Monitors[0]
+				is.True(m.DRMConnector != nil && *m.DRMConnector == "card1-DP-2")
 			},
 		},
 		{
@@ -326,18 +319,14 @@ func TestScanFixtures(t *testing.T) {
 					5: {edid: edidA, ddc: true},
 				},
 			},
-			check: func(t *testing.T, res ScanResult, _ []int) {
-				if got := monitorBuses(res); !slices.Equal(got, []int{4, 5}) {
-					t.Fatalf("monitor buses = %v, want [4 5]", got)
-				}
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(monitorBuses(res), []int{4, 5})
+
 				for _, m := range res.Monitors {
-					if m.DRMConnector != nil {
-						t.Errorf("bus %d linked to %s, want unlinked", m.I2CBus, *m.DRMConnector)
-					}
+					is.True(m.DRMConnector == nil)
 				}
-				if len(res.Unlinked) != 2 {
-					t.Errorf("unlinked = %v, want both connectors", res.Unlinked)
-				}
+
+				is.Equal(len(res.Unlinked), 2)
 			},
 		},
 		{
@@ -349,17 +338,13 @@ func TestScanFixtures(t *testing.T) {
 				},
 				buses: map[int]fxBus{4: {edid: edidB, ddc: true}},
 			},
-			check: func(t *testing.T, res ScanResult, _ []int) {
-				if got := monitorBuses(res); !slices.Equal(got, []int{4}) {
-					t.Fatalf("monitor buses = %v, want [4]", got)
-				}
-				r := reportFor(t, res, 4)
-				if r.Connector != "" || r.Sysfs != "mismatch" {
-					t.Errorf("bus 4 report = %+v, want no connector and sysfs mismatch", r)
-				}
-				if !slices.Equal(res.Unlinked, []string{"card0-DP-2"}) {
-					t.Errorf("unlinked = %v, want [card0-DP-2]", res.Unlinked)
-				}
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(monitorBuses(res), []int{4})
+
+				r := reportFor(is, res, 4)
+				is.Equal(r.Connector, "")
+				is.Equal(r.Sysfs, "mismatch")
+				is.Equal(res.Unlinked, []string{"card0-DP-2"})
 			},
 		},
 		{
@@ -370,13 +355,11 @@ func TestScanFixtures(t *testing.T) {
 					6: {edid: nil},
 				},
 			},
-			check: func(t *testing.T, res ScanResult, _ []int) {
-				if got := monitorBuses(res); !slices.Equal(got, []int{4}) {
-					t.Fatalf("monitor buses = %v, want [4]", got)
-				}
-				if r := reportFor(t, res, 6); !strings.HasPrefix(r.Result, "no EDID") {
-					t.Errorf("bus 6 result = %q, want a 'no EDID' reason", r.Result)
-				}
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(monitorBuses(res), []int{4})
+
+				r := reportFor(is, res, 6)
+				is.True(strings.HasPrefix(r.Result, "no EDID"))
 			},
 		},
 		{
@@ -391,22 +374,20 @@ func TestScanFixtures(t *testing.T) {
 					7: {edid: edidB, ddc: true, smbus: true},
 				},
 			},
-			check: func(t *testing.T, res ScanResult, reads []int) {
-				if slices.Contains(reads, 7) {
-					t.Errorf("SMBus bus 7 was probed; reads = %v", reads)
-				}
-				if got := monitorBuses(res); !slices.Equal(got, []int{4}) {
-					t.Fatalf("monitor buses = %v, want [4]", got)
-				}
+			check: func(is *is.I, res ScanResult, reads []int) {
+				is.True(!slices.Contains(reads, 7))
+				is.Equal(monitorBuses(res), []int{4})
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			is := is.New(t)
+
 			reads := installFixture(t, tt.fx)
 			res := scan()
-			tt.check(t, res, *reads)
+			tt.check(is, res, *reads)
 		})
 	}
 }

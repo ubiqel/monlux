@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/matryer/is"
+)
 
 func edidWith(seed byte) [128]byte {
 	var e [128]byte
@@ -33,14 +37,16 @@ func TestSysfsEDIDAgrees(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := sysfsEDIDAgrees(tt.connector, m); got != tt.want {
-				t.Errorf("sysfsEDIDAgrees() = %v, want %v", got, tt.want)
-			}
+			is := is.New(t)
+
+			is.Equal(sysfsEDIDAgrees(tt.connector, m), tt.want)
 		})
 	}
 }
 
 func TestResolveConnectorConflicts(t *testing.T) {
+	is := is.New(t)
+
 	name := "card1-DP-3"
 	other := "card1-DP-2"
 
@@ -52,13 +58,9 @@ func TestResolveConnectorConflicts(t *testing.T) {
 
 	resolveConnectorConflicts(monitors)
 
-	if monitors[0].DRMConnector != nil || monitors[1].DRMConnector != nil {
-		t.Errorf("conflicting monitors kept their connector")
-	}
-
-	if monitors[2].DRMConnector == nil || *monitors[2].DRMConnector != other {
-		t.Errorf("unique monitor lost its connector")
-	}
+	is.True(monitors[0].DRMConnector == nil)
+	is.True(monitors[1].DRMConnector == nil)
+	is.True(monitors[2].DRMConnector != nil && *monitors[2].DRMConnector == other)
 }
 
 func TestIsInternalPanel(t *testing.T) {
@@ -74,9 +76,9 @@ func TestIsInternalPanel(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.connector, func(t *testing.T) {
-			if got := isInternalPanel(tt.connector); got != tt.want {
-				t.Errorf("isInternalPanel(%q) = %v, want %v", tt.connector, got, tt.want)
-			}
+			is := is.New(t)
+
+			is.Equal(isInternalPanel(tt.connector), tt.want)
 		})
 	}
 }
@@ -94,9 +96,9 @@ func TestMayBeConnected(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.connector.mayBeConnected(); got != tt.want {
-				t.Errorf("mayBeConnected() = %v, want %v", got, tt.want)
-			}
+			is := is.New(t)
+
+			is.Equal(tt.connector.mayBeConnected(), tt.want)
 		})
 	}
 }
