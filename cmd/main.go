@@ -13,12 +13,6 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-const cliName = "shine"
-
-const debugFlag = "debug"
-
-const displayArg = "DISPLAY"
-
 func main() {
 	logHandler := &log.CliHandler{
 		Out:  os.Stderr,
@@ -200,5 +194,21 @@ func main() {
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
+	}
+}
+
+const cliName = "shine"
+
+const displayArg = "DISPLAY"
+
+const (
+	debugFlag             = "debug"
+	noBrightnessCacheFlag = "no-brightness-cache"
+)
+
+func noBrightnessCacheFlagDef() *cli.BoolFlag {
+	return &cli.BoolFlag{
+		Name:  noBrightnessCacheFlag,
+		Usage: "read and write brightness on the monitor, ignoring the brightness cache",
 	}
 }
