@@ -1,4 +1,4 @@
-package brightness
+package main
 
 import (
 	"slices"
@@ -32,7 +32,7 @@ func TestParseCycleSteps(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			is := is.New(t)
 
-			steps, forward, err := ParseCycleSteps(tt.input)
+			steps, forward, err := parseCycleSteps(tt.input)
 			if tt.wantErr {
 				is.True(err != nil)
 
@@ -63,7 +63,7 @@ func TestNextCycleTargetForward(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			is := is.New(t)
-			is.Equal(NextCycleTarget(tt.curr, steps, true), tt.want)
+			is.Equal(nextCycleTarget(tt.curr, steps, true), tt.want)
 		})
 	}
 }
@@ -87,7 +87,7 @@ func TestNextCycleTargetBackward(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			is := is.New(t)
-			is.Equal(NextCycleTarget(tt.curr, steps, false), tt.want)
+			is.Equal(nextCycleTarget(tt.curr, steps, false), tt.want)
 		})
 	}
 }
@@ -99,7 +99,7 @@ func TestNextCycleTargetBackwardUnsorted(t *testing.T) {
 
 	is := is.New(t)
 
-	is.Equal(NextCycleTarget(60, steps, false), uint(50))
-	is.Equal(NextCycleTarget(80, steps, false), uint(70))
-	is.Equal(NextCycleTarget(0, steps, false), uint(100))
+	is.Equal(nextCycleTarget(60, steps, false), uint(50))
+	is.Equal(nextCycleTarget(80, steps, false), uint(70))
+	is.Equal(nextCycleTarget(0, steps, false), uint(100))
 }

@@ -25,7 +25,7 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 - `cmd/`: the `package main` CLI on `urfave/cli/v3`. Only CLI wiring and output formatting live here.
   - `main.go` wires commands, the global `--debug` flag, the lock and profiling.
   - `flags.go` defines flags shared by several subcommands.
-  - `cmd_*.go`: one file per subcommand. Each one reads its arguments and calls into `internal/`.
+  - `cmd_*.go`: one file per subcommand. Each one reads its arguments and calls into `internal/`. Logic specific to one subcommand (e.g. `cycle`'s step parsing) stays in its `cmd_*.go` file.
 - `internal/monitor/`: finds monitors and selects one. Everything it touches outside the process is in `Host` (see Gotchas).
   - `monitor.go`: `Host`, `DefaultHost()`, `Monitor`, `ScanResult`, `BusReport`, and the real EDID/DDC hooks.
   - `discovery.go`: DRM connectors and candidate I2C buses from sysfs.
@@ -35,7 +35,6 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 - `internal/brightness/`: reads and sets brightness.
   - `brightness.go`: `Current`, `Write`, `Observe` (cache-aware), and `Clamp`.
   - `cache.go`: brightness cache entries, TTL, and recent-write rules.
-  - `cycle.go`: `ParseCycleSteps` and `NextCycleTarget` for `cycle`.
 - `internal/i2c/`: DDC/CI and EDID over the I2C ioctl. `Open(bus)` opens `/dev/i2c-N`. Also VCP (brightness) access and checksum code.
 - `internal/cache/`: file storage under `$XDG_CACHE_HOME/shine/` only (`Path`, `ReadJSON`, `WriteJSON`, `ErrNotExist`). It has no cache rules of its own.
 - `internal/lock/`: exclusive `flock` on `$TMPDIR/shine.lock`, taken in `main`'s `Before` hook for every invocation.
