@@ -6,7 +6,7 @@ before:
 
 builds:
   - id: monlux
-    main: ./cmd
+    main: ./cmd/monlux
     binary: monlux
     env:
       - CGO_ENABLED=0

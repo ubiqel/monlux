@@ -70,14 +70,14 @@ linters:
     - text: 'exported: .+'
       linters:
         - revive
-    - path: cmd/main\.go
+    - path: cmd/monlux/main\.go
       linters:
         - funlen
-    - path: cmd/
+    - path: cmd/monlux/
       linters:
         - forbidigo
     # Command errors are already descriptive, so they are returned as-is.
-    - path: cmd/
+    - path: cmd/monlux/
       linters:
         - wrapcheck
     - text: 'G304:'

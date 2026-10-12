@@ -11,18 +11,18 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 - `task format`: `gofumpt --extra -w ./`.
 - `task build.release`: writes `build/monlux`. `build/` is gitignored.
 - `task deps`: `go mod tidy` + `go mod vendor`. It needs network. `vendor/` is committed and used (`modules-download-mode: vendor`), so after any dependency change re-vendor and commit `vendor/`.
-- `go run ./cmd --debug <subcommand>` runs with debug logging and writes CPU profile and trace files to `$XDG_CACHE_HOME/monlux/debug/` (`os.UserCacheDir`).
+- `go run ./cmd/monlux --debug <subcommand>` runs with debug logging and writes CPU profile and trace files to `$XDG_CACHE_HOME/monlux/debug/` (`os.UserCacheDir`).
 
 ## Lint state
 
 `golangci-lint run ./...` and `gofumpt --extra -l cmd internal` are both clean. Keep them that way: fix new findings in your change rather than suppressing them.
 
-- Project-wide exclusions live in `.golangci.yaml`: `paralleltest` and `nonamedreturns` are disabled, `funlen` is excluded for `cmd/main.go`, `forbidigo` for `cmd/`, and gosec G304 and G115 everywhere.
+- Project-wide exclusions live in `.golangci.yaml`: `paralleltest` and `nonamedreturns` are disabled, `funlen` is excluded for `cmd/monlux/main.go`, `forbidigo` for `cmd/monlux/`, and gosec G304 and G115 everywhere.
 - Use an inline `//nolint:<linter> // reason` only for a single, isolated case (e.g. G103 on the ioctl call). If a pattern repeats, add a config exclusion instead.
 
 ## Layout
 
-- `cmd/`: the `package main` CLI on `urfave/cli/v3`. Only CLI wiring and output formatting live here.
+- `cmd/monlux/`: the `package main` CLI on `urfave/cli/v3`. Only CLI wiring and output formatting live here.
   - `main.go` wires commands, the global `--debug` flag, the lock and profiling.
   - `flags.go` defines flags shared by several subcommands.
   - `cmd_*.go`: one file per subcommand. Each one reads its arguments and calls into `internal/`. Logic specific to one subcommand (e.g. `cycle`'s step parsing) stays in its `cmd_*.go` file.
