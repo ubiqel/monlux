@@ -30,6 +30,24 @@ func TestWriteThenReadJSON(t *testing.T) {
 	is.Equal(got, sample{Name: "x"})
 }
 
+func TestWriteJSONReplacesFileAndLeavesNoTempFiles(t *testing.T) {
+	isolateCache(t)
+	is := is.New(t)
+
+	is.NoErr(WriteJSON("sample.json", sample{Name: "first"}))
+	is.NoErr(WriteJSON("sample.json", sample{Name: "second"}))
+
+	var got sample
+	is.NoErr(ReadJSON("sample.json", &got))
+	is.Equal(got, sample{Name: "second"})
+
+	path, err := Path("sample.json")
+	is.NoErr(err)
+	entries, err := os.ReadDir(filepath.Dir(path))
+	is.NoErr(err)
+	is.Equal(len(entries), 1)
+}
+
 func TestReadJSONMissing(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)

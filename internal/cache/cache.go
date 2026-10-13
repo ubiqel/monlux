@@ -63,7 +63,9 @@ func ReadJSON(name string, v any) error {
 	return nil
 }
 
-// WriteJSON encodes v as JSON into the named cache file.
+// WriteJSON encodes v as JSON into the named cache file. The content goes to a
+// temporary file first and is renamed into place, so a reader never sees a
+// partly written file.
 func WriteJSON(name string, v any) error {
 	path, err := Path(name)
 	if err != nil {
@@ -75,8 +77,24 @@ func WriteJSON(name string, v any) error {
 		return fmt.Errorf("marshalling to json: %w", err)
 	}
 
-	if err := os.WriteFile(path, content, 0o600); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(path), name+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("creating temp cache file: %w", err)
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }() // no-op once renamed
+
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+
 		return fmt.Errorf("writing cache file: %w", err)
+	}
+
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("closing cache file: %w", err)
+	}
+
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return fmt.Errorf("replacing cache file: %w", err)
 	}
 
 	return nil
