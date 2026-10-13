@@ -31,6 +31,11 @@ archives:
     files:
       - LICENSE
       - README.md
+      - packaging/60-monlux-i2c.rules
+      - packaging/monlux.conf
+
+source:
+  enabled: true
 
 checksum:
   name_template: checksums.txt
@@ -53,3 +58,39 @@ release:
     name: monlux
   draft: false
   prerelease: auto
+
+aurs:
+  - name: monlux-bin
+    homepage: https://github.com/ubiqel/monlux
+    description: Control external monitor brightness over DDC/CI on Linux (prebuilt binary)
+    maintainers:
+      - Kirill Salnikov <salnikov.k54 at gmail dot com>
+    license: MIT
+    package: |-
+      install -Dm755 ./monlux "${pkgdir}/usr/bin/monlux"
+      install -Dm644 ./LICENSE "${pkgdir}/usr/share/licenses/monlux/LICENSE"
+      install -Dm644 ./README.md "${pkgdir}/usr/share/doc/monlux/README.md"
+      install -Dm644 ./packaging/60-monlux-i2c.rules "${pkgdir}/usr/lib/udev/rules.d/60-monlux-i2c.rules"
+      install -Dm644 ./packaging/monlux.conf "${pkgdir}/usr/lib/modules-load.d/monlux.conf"
+    git_url: ssh://aur@aur.archlinux.org/monlux-bin.git
+    private_key: "{{ .Env.AUR_KEY }}"
+
+aur_sources:
+  - name: monlux
+    homepage: https://github.com/ubiqel/monlux
+    description: Control external monitor brightness over DDC/CI on Linux
+    maintainers:
+      - Kirill Salnikov <salnikov.k54 at gmail dot com>
+    license: MIT
+    build: |-
+      export CGO_ENABLED=0
+      export GOFLAGS="-trimpath -mod=vendor -modcacherw"
+      go build -o monlux -ldflags="-s -w -X github.com/ubiqel/monlux/internal/version.Version=${pkgver}" ./cmd/monlux
+    package: |-
+      install -Dm755 ./monlux "${pkgdir}/usr/bin/monlux"
+      install -Dm644 ./LICENSE "${pkgdir}/usr/share/licenses/monlux/LICENSE"
+      install -Dm644 ./README.md "${pkgdir}/usr/share/doc/monlux/README.md"
+      install -Dm644 ./packaging/60-monlux-i2c.rules "${pkgdir}/usr/lib/udev/rules.d/60-monlux-i2c.rules"
+      install -Dm644 ./packaging/monlux.conf "${pkgdir}/usr/lib/modules-load.d/monlux.conf"
+    git_url: ssh://aur@aur.archlinux.org/monlux.git
+    private_key: "{{ .Env.AUR_KEY }}"
