@@ -10,9 +10,9 @@ import (
 )
 
 func runUpCmd(_ context.Context, cmd *cli.Command) error {
-	useCache := !cmd.Bool(noBrightnessCacheFlag)
+	useCache := !cmd.Bool(noCacheFlag)
 
-	return monitor.DefaultHost().WithDisplay(cmd.StringArg(monitorArg), func(fd int, m monitor.Monitor) error {
+	return displayHost(cmd).WithDisplay(cmd.StringArg(monitorArg), func(fd int, m monitor.Monitor) error {
 		currPct, maximum, err := brightness.Current(fd, m, useCache)
 		if err != nil {
 			return fmt.Errorf("reading brightness from i2c bus '%v': %w", m.I2CBus, err)

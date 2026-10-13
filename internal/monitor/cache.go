@@ -21,26 +21,46 @@ type monitorsCache struct {
 
 // Monitors returns the monitors on the host. It reuses a recent scan from the
 // cache and scans again otherwise. Scans that find nothing aren't cached, so
-// a monitor that is plugged in later is still found.
+// a monitor that is plugged in later is still found. With NoCache set, it always
+// scans and touches no cache file.
 func (h Host) Monitors() []Monitor {
+	if h.NoCache {
+		slog.Debug("Monitors cache disabled, scanning.")
+
+		return h.Scan().Monitors
+	}
+
 	cached, err := readMonitorsCache()
 	switch {
 	case err == nil:
-		if age := time.Since(cached.UpdatedAt); age >= 0 && age <= monitorsCacheTTL {
+		age := time.Since(cached.UpdatedAt)
+		switch {
+		case age < 0:
+			slog.Debug("Monitors cache timestamp is in the future, scanning.", "age", age)
+		case age > monitorsCacheTTL:
+			slog.Debug("Monitors cache expired, scanning.", "age", age, "ttl", monitorsCacheTTL)
+		default:
+			slog.Debug("Monitors cache hit.", "age", age, "monitors", len(cached.Monitors))
+
 			return cached.Monitors
 		}
 	case errors.Is(err, cache.ErrNotExist):
+		slog.Debug("Monitors cache miss, no cache file, scanning.")
 	default:
 		slog.Warn("Failed to read monitors cache, scanning instead.", "error", err)
 	}
 
 	monitors := h.Scan().Monitors
 	if len(monitors) == 0 {
+		slog.Debug("Scan found no monitors, not caching the result.")
+
 		return monitors
 	}
 
 	if err := writeMonitorsCache(monitors); err != nil {
 		slog.Warn("Failed to save monitors cache.", "error", err)
+	} else {
+		slog.Debug("Saved monitors cache.", "monitors", len(monitors))
 	}
 
 	return monitors

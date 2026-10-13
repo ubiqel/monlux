@@ -9,6 +9,7 @@ import (
 
 	"github.com/ubiqel/monlux/internal/lock"
 	"github.com/ubiqel/monlux/internal/log"
+	"github.com/ubiqel/monlux/internal/monitor"
 	"github.com/ubiqel/monlux/internal/profile"
 	"github.com/ubiqel/monlux/internal/version"
 	"github.com/urfave/cli/v3"
@@ -97,6 +98,10 @@ func main() {
 					return nil
 				},
 			},
+			&cli.BoolFlag{
+				Name:  noCacheFlag,
+				Usage: "scan monitors and read and write brightness on the monitor, ignoring the caches",
+			},
 		},
 		Commands: []*cli.Command{
 			{
@@ -142,7 +147,6 @@ Examples:
 						Required: true,
 					},
 				},
-				Flags:  []cli.Flag{noBrightnessCacheFlagDef()},
 				Action: runGetCmd,
 			}, {
 				Name:      "set",
@@ -165,7 +169,6 @@ Examples:
 						Required: true,
 					},
 				},
-				Flags:  []cli.Flag{noBrightnessCacheFlagDef()},
 				Action: runSetCmd,
 			}, {
 				Name:      "up",
@@ -188,7 +191,6 @@ Examples:
 						Required: true,
 					},
 				},
-				Flags:  []cli.Flag{noBrightnessCacheFlagDef()},
 				Action: runUpCmd,
 			}, {
 				Name:      "down",
@@ -211,7 +213,6 @@ Examples:
 						Required: true,
 					},
 				},
-				Flags:  []cli.Flag{noBrightnessCacheFlagDef()},
 				Action: runDownCmd,
 			}, {
 				Name:      "cycle",
@@ -244,7 +245,6 @@ Examples:
 						Usage: "comma-separated percentages to cycle through, strictly ascending or descending",
 						Value: "0,50,100",
 					},
-					noBrightnessCacheFlagDef(),
 				},
 				Action: runCycleCmd,
 			},
@@ -271,12 +271,10 @@ const (
 )
 
 const (
-	debugFlag             = "debug"
-	noBrightnessCacheFlag = "no-brightness-cache"
+	debugFlag   = "debug"
+	noCacheFlag = "no-cache"
 )
 
-// Exit statuses. Scripts can tell a mistake in the command line apart from a
-// failure on the hardware.
 const (
 	exitFailure = 1
 	exitUsage   = 2
@@ -302,11 +300,11 @@ const monitorDescription = `<monitor> names one monitor. Give its DRM connector,
 printed by "monlux list". Other forms: drm:<connector>, edid:<identity> and
 i2c:<bus>. If several monitors match, use i2c:<bus>.`
 
-func noBrightnessCacheFlagDef() *cli.BoolFlag {
-	return &cli.BoolFlag{
-		Name:  noBrightnessCacheFlag,
-		Usage: "read and write brightness on the monitor, ignoring the brightness cache",
-	}
+func displayHost(cmd *cli.Command) monitor.Host {
+	host := monitor.DefaultHost()
+	host.NoCache = cmd.Bool(noCacheFlag)
+
+	return host
 }
 
 type usageError struct {

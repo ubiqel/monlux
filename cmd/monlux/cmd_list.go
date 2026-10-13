@@ -7,13 +7,12 @@ import (
 	"sync"
 
 	"github.com/ubiqel/monlux/internal/i2c"
-	"github.com/ubiqel/monlux/internal/monitor"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/sys/unix"
 )
 
-func runListCmd(_ context.Context, _ *cli.Command) error {
-	host := monitor.DefaultHost()
+func runListCmd(_ context.Context, cmd *cli.Command) error {
+	host := displayHost(cmd)
 	monitors := host.Monitors()
 
 	type row struct {

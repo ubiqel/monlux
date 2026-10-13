@@ -122,7 +122,7 @@ To avoid slow DDC/CI round trips, `monlux` caches results under `$XDG_CACHE_HOME
 - The monitor list is cached for 60 seconds.
 - Brightness is cached for 10 seconds, per I2C bus and monitor identity.
 
-Use `--no-brightness-cache` on `get`, `set`, `up`, `down`, or `cycle` to read and write the monitor directly. Or delete the files in that directory.
+Pass `--no-cache` to any command to skip both caches: it scans for monitors and reads and writes brightness directly, without saving anything. Or delete the files in that directory.
 
 ## License
 

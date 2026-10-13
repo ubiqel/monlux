@@ -20,6 +20,8 @@ type Host struct {
 
 	ReadEDID func(bus int) ([128]byte, error)
 	ProbeDDC func(bus int) bool
+
+	NoCache bool // scan every time and don't read or write the monitors cache
 }
 
 // DefaultHost returns a Host for the real machine.

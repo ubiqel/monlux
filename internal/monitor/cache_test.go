@@ -145,6 +145,51 @@ func TestMonitorsUsesFreshCache(t *testing.T) {
 	is.Equal(len(*reads), 0)
 }
 
+func TestMonitorsNoCacheIgnoresFreshCache(t *testing.T) {
+	isolateCache(t)
+	is := is.New(t)
+
+	host, reads := installFixture(t, fixture{
+		gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}}},
+		connectors: []fxConnector{
+			{name: "card0-DP-2", gpu: 0, status: "connected", edid: makeEDID("ALPHA"), ddcBus: 4},
+		},
+		buses: map[int]fxBus{4: {edid: makeEDID("ALPHA"), ddc: true}},
+	})
+	host.NoCache = true
+
+	writeCacheFile(t, monitorsCache{
+		Monitors:  []Monitor{{I2CBus: 9, EDIDIdentity: "CACHED"}},
+		UpdatedAt: time.Now(),
+	})
+
+	got := host.Monitors()
+	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{4})
+	is.Equal(len(*reads), 1)
+
+	// The cache file is left as it was.
+	cached, err := readMonitorsCache()
+	is.NoErr(err)
+	is.Equal(monitorBuses(ScanResult{Monitors: cached.Monitors}), []int{9})
+}
+
+func TestMonitorsNoCacheDoesNotWrite(t *testing.T) {
+	isolateCache(t)
+	is := is.New(t)
+
+	host, _ := installFixture(t, fixture{
+		gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}}},
+		connectors: []fxConnector{
+			{name: "card0-DP-2", gpu: 0, status: "connected", edid: makeEDID("ALPHA"), ddcBus: 4},
+		},
+		buses: map[int]fxBus{4: {edid: makeEDID("ALPHA"), ddc: true}},
+	})
+	host.NoCache = true
+
+	is.Equal(monitorBuses(ScanResult{Monitors: host.Monitors()}), []int{4})
+	is.True(!cacheFileExists(t))
+}
+
 func TestMonitorsRescansStaleCache(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)

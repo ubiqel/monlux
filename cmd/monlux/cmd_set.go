@@ -10,9 +10,9 @@ import (
 )
 
 func runSetCmd(_ context.Context, cmd *cli.Command) error {
-	useCache := !cmd.Bool(noBrightnessCacheFlag)
+	useCache := !cmd.Bool(noCacheFlag)
 
-	return monitor.DefaultHost().WithDisplay(cmd.StringArg(monitorArg), func(fd int, m monitor.Monitor) error {
+	return displayHost(cmd).WithDisplay(cmd.StringArg(monitorArg), func(fd int, m monitor.Monitor) error {
 		// Convert percent to real value (it's possible that max is not 100).
 		_, maximum, err := brightness.Current(fd, m, useCache)
 		if err != nil {

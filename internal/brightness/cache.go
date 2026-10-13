@@ -35,7 +35,18 @@ type Cache map[int]Entry
 // false if the bus holds a different monitor or has no usable entry.
 func Lookup(bus int, identity string) (Entry, bool) {
 	e, ok := LoadCache()[bus]
-	if !ok || e.Identity != identity || e.Maximum == 0 {
+	switch {
+	case !ok:
+		slog.Debug("Brightness cache miss, no entry for bus.", "bus", bus)
+
+		return Entry{}, false
+	case e.Identity != identity:
+		slog.Debug("Brightness cache miss, entry belongs to another monitor.", "bus", bus, "edid", identity, "cached_edid", e.Identity)
+
+		return Entry{}, false
+	case e.Maximum == 0:
+		slog.Debug("Brightness cache miss, entry has no maximum.", "bus", bus)
+
 		return Entry{}, false
 	}
 
@@ -63,7 +74,11 @@ func Store(bus int, identity string, current, maximum uint16, written bool) {
 
 	if err := SaveCache(c); err != nil {
 		slog.Warn("Failed to save brightness cache.", "error", err)
+
+		return
 	}
+
+	slog.Debug("Saved brightness cache.", "bus", bus, "raw", current, "maximum", maximum, "written", written)
 }
 
 // Forget removes the entry for bus.
@@ -73,7 +88,11 @@ func Forget(bus int) {
 
 	if err := SaveCache(c); err != nil {
 		slog.Warn("Failed to save brightness cache.", "error", err)
+
+		return
 	}
+
+	slog.Debug("Removed brightness cache entry after failed write.", "bus", bus)
 }
 
 // LoadCache reads the cache. Any failure yields an empty cache, since the

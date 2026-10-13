@@ -18,9 +18,9 @@ func runCycleCmd(_ context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("invalid --steps: %w", err)
 	}
 
-	useCache := !cmd.Bool(noBrightnessCacheFlag)
+	useCache := !cmd.Bool(noCacheFlag)
 
-	return monitor.DefaultHost().WithDisplay(cmd.StringArg(monitorArg), func(fd int, m monitor.Monitor) error {
+	return displayHost(cmd).WithDisplay(cmd.StringArg(monitorArg), func(fd int, m monitor.Monitor) error {
 		currPct, rawMaximum, err := brightness.Current(fd, m, useCache)
 		if err != nil {
 			return fmt.Errorf("reading brightness from i2c bus '%v': %w", m.I2CBus, err)

@@ -49,7 +49,7 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 - **Caches can return stale values.**
   - Monitor list is cached in `$XDG_CACHE_HOME/monlux/monitors.json` for 60 s (`internal/monitor`). Scans that find no monitors aren't cached.
   - Brightness is cached in `brightness.json` for 10 s, keyed by I2C bus and EDID identity (`internal/brightness`).
-  - When debugging brightness or detection, add `--no-brightness-cache`, or delete the files under `$XDG_CACHE_HOME/monlux/`.
+  - When debugging brightness or detection, add the root `--no-cache` flag (it skips both caches, and works before or after the subcommand), or delete the files under `$XDG_CACHE_HOME/monlux/`.
 - **Failures on a sleeping display.** `Host.WithDisplay` reports DPMS "asleep" when a DDC operation fails. Check the display state before debugging the I2C code.
 - **Hardware is injected through `monitor.Host`.** It holds the sysfs paths (`DRMPath`, `I2CSysPath`, `DevPath`) and the hardware hooks (`ReadEDID`, `ProbeDDC`). Production code uses `monitor.DefaultHost()`. There are no package globals to swap.
 - **Tests never touch real hardware.** `internal/monitor/fixture_test.go` (`installFixture`) builds a fake sysfs and `/dev` tree in a temp dir and returns a `Host` wired to fake buses. Keep new tests hermetic the same way. Brightness tests pass a `-1` fd, so any real I/O fails.
