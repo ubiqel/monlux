@@ -2,11 +2,11 @@ package brightness
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
-	"github.com/ubiqel/monlux/internal/ddc"
 	"github.com/ubiqel/monlux/internal/monitor"
 )
 
@@ -34,6 +34,14 @@ func Current(dev Device, m monitor.Monitor, useCache bool) (current, maximum uin
 	if err != nil {
 		return 0, 0, fmt.Errorf("reading brightness via i2c: %w", err)
 	}
+
+	if maximum == 0 {
+		return 0, 0, errors.New("device reports a maximum brightness of 0")
+	}
+
+	// Some monitors report a current above their maximum. Normalize it here so
+	// stepping and the cache see a value that is within range.
+	current = min(current, maximum)
 
 	if useCache {
 		Store(m.I2CBus, m.EDIDIdentity, current, maximum)
@@ -128,7 +136,7 @@ type Reading struct {
 }
 
 func Read(host monitor.Host, m monitor.Monitor, useCache bool) (Reading, error) {
-	bus, err := ddc.Open(m.I2CBus)
+	bus, err := host.OpenBus(m.I2CBus)
 	if err != nil {
 		slog.Warn("Failed to open fd for I2C bus.", "bus", m.I2CBus, "error", err)
 

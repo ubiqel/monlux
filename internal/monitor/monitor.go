@@ -16,8 +16,15 @@ type Host struct {
 
 	ReadEDID func(bus int) ([128]byte, error)
 	ProbeDDC func(bus int) bool
+	OpenBus  func(bus int) (Bus, error)
 
 	NoCache bool
+}
+
+type Bus interface {
+	GetBrightness() (current, maximum uint16, err error)
+	SetBrightness(value uint16) error
+	Close() error
 }
 
 func DefaultHost() Host {
@@ -27,7 +34,19 @@ func DefaultHost() Host {
 		DevPath:    "/dev",
 		ReadEDID:   readEDIDFromBus,
 		ProbeDDC:   probeDDCOnBus,
+		OpenBus:    openDDCBus,
 	}
+}
+
+// openDDCBus returns a nil interface on failure. Returning ddc.Open's result
+// directly would wrap a nil *ddc.Bus in a non-nil Bus.
+func openDDCBus(busNum int) (Bus, error) {
+	bus, err := ddc.Open(busNum)
+	if err != nil {
+		return nil, fmt.Errorf("opening bus: %w", err)
+	}
+
+	return bus, nil
 }
 
 type Monitor struct {

@@ -58,9 +58,6 @@ func ReadJSON(name string, v any) error {
 	return nil
 }
 
-// WriteJSON encodes v as JSON into the named cache file. The content goes to a
-// temporary file first and is renamed into place, so a reader never sees a
-// partly written file.
 func WriteJSON(name string, v any) error {
 	path, err := Path(name)
 	if err != nil {
