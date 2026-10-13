@@ -37,7 +37,7 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
   - `cache.go`: brightness cache entries, TTL, and recent-write rules.
 - `internal/i2c/`: DDC/CI and EDID over the I2C ioctl. `Open(bus)` opens `/dev/i2c-N`. Also VCP (brightness) access and checksum code.
 - `internal/cache/`: file storage under `$XDG_CACHE_HOME/monlux/` only (`Path`, `ReadJSON`, `WriteJSON`, `ErrNotExist`). It has no cache rules of its own.
-- `internal/lock/`: exclusive `flock` on `$TMPDIR/monlux.lock`, taken in `main`'s `Before` hook for every invocation.
+- `internal/lock/`: exclusive `flock` on `$XDG_RUNTIME_DIR/monlux.lock` (fallback `$TMPDIR/monlux-<uid>.lock`), mode 0600, taken in `main`'s `Before` hook for every invocation.
 - `internal/profile/`, `internal/log/`, `internal/version/`: debug profiling, slog handler, version string.
 
 ## Gotchas
