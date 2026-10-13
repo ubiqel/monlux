@@ -35,7 +35,7 @@ func (h Host) Scan() ScanResult {
 		reportOf[bus] = idx
 		res.Buses = append(res.Buses, BusReport{Bus: bus})
 
-		edid, err := h.ReadEDID(bus)
+		edid, err := h.readEDID(bus)
 		if err != nil {
 			slog.Debug("Failed to read EDID from I2C bus.", "error", err, "bus", bus)
 			res.Buses[idx].Result = fmt.Sprintf("no EDID: %v", err)
@@ -84,7 +84,7 @@ func (h Host) Scan() ScanResult {
 		}
 
 		r.Probed = true
-		r.DDC = h.ProbeDDC(m.I2CBus)
+		r.DDC = h.probeDDC(m.I2CBus)
 		if !r.DDC {
 			r.Result = "EDID only, DDC/CI not answering"
 			slog.Debug("Bus answers EDID but not DDC/CI.", "bus", m.I2CBus)
@@ -113,21 +113,21 @@ func (h Host) Scan() ScanResult {
 	}
 
 	warnDuplicateIdentities(kept)
-	res.Monitors = kept
+	res.monitors = kept
 
 	return res
 }
 
-func associateConnectors(monitors []Monitor, connectors []DRMConnector) map[int]string {
+func associateConnectors(monitors []Monitor, connectors []drmConnector) map[int]string {
 	links := make(map[int]string)
 
 	for i := range monitors {
 		for _, connector := range connectors {
-			if !connector.mayBeConnected() || connector.Bus == nil {
+			if !connector.mayBeConnected() || connector.bus == nil {
 				continue
 			}
 
-			if *connector.Bus != monitors[i].I2CBus {
+			if *connector.bus != monitors[i].I2CBus {
 				continue
 			}
 
@@ -135,12 +135,12 @@ func associateConnectors(monitors []Monitor, connectors []DRMConnector) map[int]
 			// it's only trusted when the connector's EDID agrees.
 			if !sysfsEDIDAgrees(connector, monitors[i]) {
 				slog.Debug("Direct DDC link disagrees with connector EDID, ignoring it.",
-					"bus", monitors[i].I2CBus, "connector", connector.Name)
+					"bus", monitors[i].I2CBus, "connector", connector.name)
 
 				break
 			}
 
-			name := connector.Name
+			name := connector.name
 			monitors[i].DRMConnector = &name
 			links[monitors[i].I2CBus] = "ddc"
 
@@ -160,21 +160,21 @@ func associateConnectors(monitors []Monitor, connectors []DRMConnector) map[int]
 			continue
 		}
 
-		var match *DRMConnector
+		var match *drmConnector
 		matches := 0
 
 		for _, connector := range connectors {
-			if !connector.mayBeConnected() || claimed[connector.Name] {
+			if !connector.mayBeConnected() || claimed[connector.name] {
 				continue
 			}
 
-			if len(connector.EDID) < 128 {
+			if len(connector.edid) < 128 {
 				continue
 			}
 
 			// EDID length can be bigger than 128 bytes (due to extension
 			// blocks) so we cut the size.
-			if !bytes.Equal(monitor.EDIDRaw[:], connector.EDID[:128]) {
+			if !bytes.Equal(monitor.EDIDRaw[:], connector.edid[:128]) {
 				continue
 			}
 
@@ -184,7 +184,7 @@ func associateConnectors(monitors []Monitor, connectors []DRMConnector) map[int]
 
 		// Several matches are ambiguous, so the connector stays unknown.
 		if matches == 1 {
-			name := match.Name
+			name := match.name
 			monitors[i].DRMConnector = &name
 			links[monitor.I2CBus] = "edid"
 		}
@@ -196,13 +196,13 @@ func associateConnectors(monitors []Monitor, connectors []DRMConnector) map[int]
 // sysfsState describes how a monitor's EDID compares with sysfs. "match" means
 // the monitor is linked to a connector. "mismatch" means the connector on the
 // monitor's own bus reports a different EDID. "none" means neither applies.
-func sysfsState(m Monitor, connectors []DRMConnector) string {
+func sysfsState(m Monitor, connectors []drmConnector) string {
 	if m.DRMConnector != nil {
 		return "match"
 	}
 
 	for _, c := range connectors {
-		if c.Bus != nil && *c.Bus == m.I2CBus && len(c.EDID) >= 128 {
+		if c.bus != nil && *c.bus == m.I2CBus && len(c.edid) >= 128 {
 			return "mismatch"
 		}
 	}
@@ -213,7 +213,7 @@ func sysfsState(m Monitor, connectors []DRMConnector) string {
 // unlinkedConnectors returns the names of connected connectors that no
 // monitor is linked to. Internal panels are excluded, since they never have
 // DDC/CI.
-func unlinkedConnectors(monitors []Monitor, connectors []DRMConnector) []string {
+func unlinkedConnectors(monitors []Monitor, connectors []drmConnector) []string {
 	linked := make(map[string]bool)
 	for _, m := range monitors {
 		if m.DRMConnector != nil {
@@ -223,11 +223,11 @@ func unlinkedConnectors(monitors []Monitor, connectors []DRMConnector) []string 
 
 	var names []string
 	for _, c := range connectors {
-		if !c.mayBeConnected() || linked[c.Name] || isInternalPanel(c.Name) {
+		if !c.mayBeConnected() || linked[c.name] || isInternalPanel(c.name) {
 			continue
 		}
 
-		names = append(names, c.Name)
+		names = append(names, c.name)
 	}
 
 	return names
@@ -259,12 +259,12 @@ func isInternalPanel(connectorName string) bool {
 
 // sysfsEDIDAgrees reports whether a connector's sysfs EDID is consistent with
 // a monitor's EDID. An empty sysfs EDID is no evidence either way.
-func sysfsEDIDAgrees(connector DRMConnector, m Monitor) bool {
-	if len(connector.EDID) < 128 {
+func sysfsEDIDAgrees(connector drmConnector, m Monitor) bool {
+	if len(connector.edid) < 128 {
 		return true
 	}
 
-	return bytes.Equal(m.EDIDRaw[:], connector.EDID[:128])
+	return bytes.Equal(m.EDIDRaw[:], connector.edid[:128])
 }
 
 // resolveConnectorConflicts clears the connector of any monitors that claim

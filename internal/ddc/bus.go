@@ -31,16 +31,16 @@ type message struct {
 // i2cMsg and rdwrData mirror the kernel's struct i2c_msg and
 // struct i2c_rdwr_ioctl_data.
 type i2cMsg struct {
-	_     structs.HostLayout
-	Addr  uint16
-	Flags uint16
-	Len   uint16
-	Buf   *byte
+	_      structs.HostLayout
+	addr   uint16
+	flags  uint16
+	length uint16
+	buf    *byte
 }
 
 type rdwrData struct {
-	Msgs  *i2cMsg
-	NMsgs uint32
+	msgs  *i2cMsg
+	nmsgs uint32
 }
 
 func Open(bus int) (*Bus, error) {
@@ -80,10 +80,10 @@ func ioctlTransfer(fd int, msgs []message) error {
 			flags = i2cMRead
 		}
 
-		raw[i] = i2cMsg{Addr: m.addr, Flags: flags, Len: uint16(len(m.buf)), Buf: &m.buf[0]}
+		raw[i] = i2cMsg{addr: m.addr, flags: flags, length: uint16(len(m.buf)), buf: &m.buf[0]}
 	}
 
-	data := rdwrData{Msgs: &raw[0], NMsgs: uint32(len(raw))}
+	data := rdwrData{msgs: &raw[0], nmsgs: uint32(len(raw))}
 	//nolint:gosec // G103: the ioctl needs the raw pointer to the request struct
 	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), uintptr(ioctlI2CRdwr), uintptr(unsafe.Pointer(&data)))
 	if errno != 0 {

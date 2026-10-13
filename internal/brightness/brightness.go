@@ -19,15 +19,15 @@ type Device interface {
 func Current(dev Device, m monitor.Monitor, useCache bool) (current, maximum uint16, err error) {
 	if !useCache {
 		slog.Debug("Brightness cache disabled, reading monitor.", "bus", m.I2CBus)
-	} else if e, ok := Lookup(m.I2CBus, m.EDIDIdentity); ok {
+	} else if e, ok := lookup(m.I2CBus, m.EDIDIdentity); ok {
 		age := time.Since(e.UpdatedAt)
-		if e.Fresh(time.Now()) {
+		if e.fresh(time.Now()) {
 			slog.Debug("Brightness cache hit.", "bus", m.I2CBus, "raw", e.Current, "maximum", e.Maximum, "age", age)
 
 			return e.Current, e.Maximum, nil
 		}
 
-		slog.Debug("Brightness cache entry is stale, reading monitor.", "bus", m.I2CBus, "age", age, "ttl", TTL)
+		slog.Debug("Brightness cache entry is stale, reading monitor.", "bus", m.I2CBus, "age", age, "ttl", ttl)
 	}
 
 	current, maximum, err = dev.GetBrightness()
@@ -44,29 +44,29 @@ func Current(dev Device, m monitor.Monitor, useCache bool) (current, maximum uin
 	current = min(current, maximum)
 
 	if useCache {
-		Store(m.I2CBus, m.EDIDIdentity, current, maximum)
+		store(m.I2CBus, m.EDIDIdentity, current, maximum)
 	}
 
 	return current, maximum, nil
 }
 
-// Write sets the raw brightness of m. A failed write forgets the cached value,
+// write sets the raw brightness of m. A failed write forgets the cached value,
 // since the monitor's state is unknown after it.
-func Write(dev Device, m monitor.Monitor, raw, maximum uint16, useCache bool) error {
+func write(dev Device, m monitor.Monitor, raw, maximum uint16, useCache bool) error {
 	if !useCache {
 		slog.Debug("Brightness cache disabled, writing monitor.", "bus", m.I2CBus)
 	}
 
 	if err := dev.SetBrightness(raw); err != nil {
 		if useCache {
-			Forget(m.I2CBus)
+			forget(m.I2CBus)
 		}
 
 		return fmt.Errorf("writing brightness via i2c: %w", err)
 	}
 
 	if useCache {
-		Store(m.I2CBus, m.EDIDIdentity, raw, maximum)
+		store(m.I2CBus, m.EDIDIdentity, raw, maximum)
 	}
 
 	return nil
@@ -74,7 +74,7 @@ func Write(dev Device, m monitor.Monitor, raw, maximum uint16, useCache bool) er
 
 func SetPercent(dev Device, m monitor.Monitor, pct int, useCache bool) error {
 	return adjust(dev, m, useCache, func(_, maximum uint16) uint16 {
-		return Raw(pct, maximum)
+		return percentToRaw(pct, maximum)
 	})
 }
 
@@ -91,7 +91,7 @@ func adjust(dev Device, m monitor.Monitor, useCache bool, next func(raw, maximum
 		return fmt.Errorf("reading brightness from i2c bus '%v': %w", m.I2CBus, err)
 	}
 
-	if err := Write(dev, m, next(raw, maximum), maximum, useCache); err != nil {
+	if err := write(dev, m, next(raw, maximum), maximum, useCache); err != nil {
 		return fmt.Errorf("setting new brightness value via i2c bus '%v': %w", m.I2CBus, err)
 	}
 
@@ -115,17 +115,17 @@ func stepRaw(raw, maximum uint16, delta int) uint16 {
 		span = -span
 	}
 
-	return uint16(Clamp(int(raw)+span, 0, int(maximum)))
+	return uint16(clamp(int(raw)+span, 0, int(maximum)))
 }
 
 // Percent rounds to nearest. Truncating would read a value written as N% back
 // as N-1% when the maximum isn't 100.
 func Percent(raw, maximum uint16) int {
-	return Clamp((int(raw)*100+int(maximum)/2)/int(maximum), 0, 100)
+	return clamp((int(raw)*100+int(maximum)/2)/int(maximum), 0, 100)
 }
 
-func Raw(pct int, maximum uint16) uint16 {
-	pct = Clamp(pct, 0, 100)
+func percentToRaw(pct int, maximum uint16) uint16 {
+	pct = clamp(pct, 0, 100)
 
 	return uint16((pct*int(maximum) + 50) / 100)
 }
@@ -154,7 +154,7 @@ func Read(host monitor.Host, m monitor.Monitor, useCache bool) (Reading, error) 
 	return Reading{Percent: Percent(raw, maximum)}, nil
 }
 
-func Clamp[T cmp.Ordered](value, minimum, maximum T) T {
+func clamp[T cmp.Ordered](value, minimum, maximum T) T {
 	if value < minimum {
 		return minimum
 	}

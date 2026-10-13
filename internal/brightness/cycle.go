@@ -41,7 +41,7 @@ func NewCycle(steps []uint) (Cycle, error) {
 
 func (c Cycle) Apply(dev Device, m monitor.Monitor, useCache bool) error {
 	return adjust(dev, m, useCache, func(raw, maximum uint16) uint16 {
-		return Raw(int(c.next(uint(Percent(raw, maximum)))), maximum)
+		return percentToRaw(int(c.next(uint(Percent(raw, maximum)))), maximum)
 	})
 }
 

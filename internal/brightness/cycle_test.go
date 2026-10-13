@@ -230,7 +230,7 @@ func TestCycleApplyUsesCache(t *testing.T) {
 	is := is.New(t)
 
 	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
-	Store(m.I2CBus, m.EDIDIdentity, 0, 255)
+	store(m.I2CBus, m.EDIDIdentity, 0, 255)
 
 	c, err := NewCycle([]uint{0, 50, 100})
 	is.NoErr(err)
@@ -259,13 +259,13 @@ func TestCycleApplyWriteFailureForgetsCache(t *testing.T) {
 	is := is.New(t)
 
 	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
-	Store(m.I2CBus, m.EDIDIdentity, 0, 255)
+	store(m.I2CBus, m.EDIDIdentity, 0, 255)
 
 	c, err := NewCycle([]uint{0, 50, 100})
 	is.NoErr(err)
 
 	is.True(c.Apply(&fakeDevice{maximum: 255, setErr: errNoDevice}, m, true) != nil)
 
-	_, ok := Lookup(m.I2CBus, m.EDIDIdentity)
+	_, ok := lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(!ok)
 }

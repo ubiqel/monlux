@@ -48,7 +48,7 @@ func TestCurrentUsesFreshCache(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	is.NoErr(SaveCache(Cache{
+	is.NoErr(saveCache(fileCache{
 		4: {Identity: "A", Current: 40, Maximum: 100, UpdatedAt: time.Now()},
 	}))
 
@@ -62,13 +62,13 @@ func TestCurrentReadsWhenNotUsable(t *testing.T) {
 	isolateCache(t)
 
 	now := time.Now()
-	fresh := Entry{Identity: "A", Current: 40, Maximum: 100, UpdatedAt: now}
+	fresh := entry{Identity: "A", Current: 40, Maximum: 100, UpdatedAt: now}
 	stale := fresh
-	stale.UpdatedAt = now.Add(-2 * TTL)
+	stale.UpdatedAt = now.Add(-2 * ttl)
 
 	tests := []struct {
 		name     string
-		entry    Entry
+		entry    entry
 		monitor  monitor.Monitor
 		useCache bool
 	}{
@@ -81,7 +81,7 @@ func TestCurrentReadsWhenNotUsable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			is := is.New(t)
 
-			is.NoErr(SaveCache(Cache{4: tt.entry}))
+			is.NoErr(saveCache(fileCache{4: tt.entry}))
 
 			_, _, err := Current(&fakeDevice{getErr: errNoDevice}, tt.monitor, tt.useCache)
 			is.True(err != nil)
@@ -100,7 +100,7 @@ func TestCurrentPopulatesCacheOnMiss(t *testing.T) {
 	is.Equal(raw, uint16(40))
 	is.Equal(maximum, uint16(100))
 
-	e, ok := Lookup(m.I2CBus, m.EDIDIdentity)
+	e, ok := lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(ok)
 	is.Equal(e.Current, uint16(40))
 	is.Equal(e.Maximum, uint16(100))
@@ -116,7 +116,7 @@ func TestCurrentWithoutCacheDoesNotStore(t *testing.T) {
 	is.NoErr(err)
 	is.Equal(raw, uint16(40))
 
-	_, ok := Lookup(m.I2CBus, m.EDIDIdentity)
+	_, ok := lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(!ok)
 }
 
@@ -125,7 +125,7 @@ func TestCurrentFutureEntryReadsDevice(t *testing.T) {
 	is := is.New(t)
 
 	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
-	is.NoErr(SaveCache(Cache{
+	is.NoErr(saveCache(fileCache{
 		4: {Identity: "A", Current: 40, Maximum: 100, UpdatedAt: time.Now().Add(time.Minute)},
 	}))
 
@@ -153,7 +153,7 @@ func TestCurrentRejectsZeroMaximum(t *testing.T) {
 	_, _, err := Current(&fakeDevice{current: 0, maximum: 0}, m, true)
 	is.True(err != nil)
 
-	_, ok := Lookup(m.I2CBus, m.EDIDIdentity)
+	_, ok := lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(!ok)
 }
 
@@ -168,7 +168,7 @@ func TestCurrentClampsToMaximum(t *testing.T) {
 	is.Equal(raw, uint16(100))
 	is.Equal(maximum, uint16(100))
 
-	e, ok := Lookup(m.I2CBus, m.EDIDIdentity)
+	e, ok := lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(ok)
 	is.Equal(e.Current, uint16(100))
 }
@@ -180,10 +180,10 @@ func TestWriteSuccessStoresValue(t *testing.T) {
 	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
 	dev := &fakeDevice{}
 
-	is.NoErr(Write(dev, m, 50, 255, true))
+	is.NoErr(write(dev, m, 50, 255, true))
 	is.Equal(dev.writes, []uint16{50})
 
-	e, ok := Lookup(m.I2CBus, m.EDIDIdentity)
+	e, ok := lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(ok)
 	is.Equal(e.Current, uint16(50))
 	is.Equal(e.Maximum, uint16(255))
@@ -195,9 +195,9 @@ func TestWriteSuccessWithoutCacheDoesNotStore(t *testing.T) {
 
 	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
 
-	is.NoErr(Write(&fakeDevice{}, m, 50, 100, false))
+	is.NoErr(write(&fakeDevice{}, m, 50, 100, false))
 
-	_, ok := Lookup(m.I2CBus, m.EDIDIdentity)
+	_, ok := lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(!ok)
 }
 
@@ -206,12 +206,12 @@ func TestWriteFailureForgetsEntry(t *testing.T) {
 	is := is.New(t)
 
 	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
-	Store(m.I2CBus, m.EDIDIdentity, 40, 100)
+	store(m.I2CBus, m.EDIDIdentity, 40, 100)
 
-	err := Write(&fakeDevice{setErr: errNoDevice}, m, 50, 100, true)
+	err := write(&fakeDevice{setErr: errNoDevice}, m, 50, 100, true)
 	is.True(err != nil)
 
-	_, ok := Lookup(m.I2CBus, m.EDIDIdentity)
+	_, ok := lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(!ok) // a failed write leaves the monitor's state unknown
 }
 
@@ -220,11 +220,11 @@ func TestWriteWithoutCacheLeavesCacheAlone(t *testing.T) {
 	is := is.New(t)
 
 	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
-	Store(m.I2CBus, m.EDIDIdentity, 40, 100)
+	store(m.I2CBus, m.EDIDIdentity, 40, 100)
 
-	is.True(Write(&fakeDevice{setErr: errNoDevice}, m, 50, 100, false) != nil)
+	is.True(write(&fakeDevice{setErr: errNoDevice}, m, 50, 100, false) != nil)
 
-	e, ok := Lookup(m.I2CBus, m.EDIDIdentity)
+	e, ok := lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(ok)
 	is.Equal(e.Current, uint16(40))
 }
@@ -232,7 +232,7 @@ func TestWriteWithoutCacheLeavesCacheAlone(t *testing.T) {
 func TestWriteErrorKeepsCause(t *testing.T) {
 	is := is.New(t)
 
-	err := Write(&fakeDevice{setErr: ddc.ErrUnsupportedFeature}, monitor.Monitor{I2CBus: 4}, 50, 100, false)
+	err := write(&fakeDevice{setErr: ddc.ErrUnsupportedFeature}, monitor.Monitor{I2CBus: 4}, 50, 100, false)
 	is.True(errors.Is(err, ddc.ErrUnsupportedFeature))
 }
 
@@ -331,12 +331,12 @@ func TestStepWriteFailureForgetsCache(t *testing.T) {
 	is := is.New(t)
 
 	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
-	Store(m.I2CBus, m.EDIDIdentity, 40, 100)
+	store(m.I2CBus, m.EDIDIdentity, 40, 100)
 
 	err := Step(&fakeDevice{current: 40, maximum: 100, setErr: errNoDevice}, m, 1, true)
 	is.True(errors.Is(err, errNoDevice))
 
-	_, ok := Lookup(m.I2CBus, m.EDIDIdentity)
+	_, ok := lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(!ok)
 }
 
@@ -381,7 +381,7 @@ func TestSetPercentUpdatesCache(t *testing.T) {
 
 	is.NoErr(SetPercent(&fakeDevice{maximum: 100}, m, 60, true))
 
-	e, ok := Lookup(m.I2CBus, m.EDIDIdentity)
+	e, ok := lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(ok)
 	is.Equal(e.Current, uint16(60))
 }
@@ -402,12 +402,12 @@ func TestSetPercentWriteFailureForgetsCache(t *testing.T) {
 	is := is.New(t)
 
 	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
-	Store(m.I2CBus, m.EDIDIdentity, 40, 100)
+	store(m.I2CBus, m.EDIDIdentity, 40, 100)
 
 	err := SetPercent(&fakeDevice{current: 40, maximum: 100, setErr: errNoDevice}, m, 60, true)
 	is.True(errors.Is(err, errNoDevice))
 
-	_, ok := Lookup(m.I2CBus, m.EDIDIdentity)
+	_, ok := lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(!ok)
 }
 
@@ -430,7 +430,7 @@ func TestRawGoldenValues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			is := is.New(t)
-			is.Equal(Raw(tt.pct, tt.maximum), tt.want)
+			is.Equal(percentToRaw(tt.pct, tt.maximum), tt.want)
 		})
 	}
 }
@@ -464,7 +464,7 @@ func TestPercentRoundTripsThroughRaw(t *testing.T) {
 
 	for _, maximum := range []uint16{100, 255, 1000, 65535} {
 		for pct := range 101 {
-			is.Equal(Percent(Raw(pct, maximum), maximum), pct)
+			is.Equal(Percent(percentToRaw(pct, maximum), maximum), pct)
 		}
 	}
 }
@@ -475,7 +475,7 @@ func TestRawIsMonotonic(t *testing.T) {
 	for _, maximum := range []uint16{100, 255, 1000} {
 		prev := uint16(0)
 		for pct := range 101 {
-			r := Raw(pct, maximum)
+			r := percentToRaw(pct, maximum)
 			is.True(r >= prev)
 			prev = r
 		}
@@ -485,9 +485,9 @@ func TestRawIsMonotonic(t *testing.T) {
 func TestClamp(t *testing.T) {
 	is := is.New(t)
 
-	is.Equal(Clamp(-5, 0, 100), 0)
-	is.Equal(Clamp(120, 0, 100), 100)
-	is.Equal(Clamp(40, 0, 100), 40)
+	is.Equal(clamp(-5, 0, 100), 0)
+	is.Equal(clamp(120, 0, 100), 100)
+	is.Equal(clamp(40, 0, 100), 40)
 }
 
 func readHost(t *testing.T, dev *fakeDevice, dpms string) (monitor.Host, monitor.Monitor) {

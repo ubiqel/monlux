@@ -9,17 +9,17 @@ import (
 	"strings"
 )
 
-type DRMConnector struct {
-	Name string
-	Bus  *int
-	EDID []byte
-	// Connected is only meaningful when StatusReliable is true.
-	Connected      bool
-	StatusReliable bool
+type drmConnector struct {
+	name string
+	bus  *int
+	edid []byte
+	// connected is only meaningful when StatusReliable is true.
+	connected      bool
+	statusReliable bool
 }
 
-func (c DRMConnector) mayBeConnected() bool {
-	return c.Connected || !c.StatusReliable
+func (c drmConnector) mayBeConnected() bool {
+	return c.connected || !c.statusReliable
 }
 
 // candidateBuses returns the I2C buses worth probing for a DDC monitor.
@@ -29,7 +29,7 @@ func (c DRMConnector) mayBeConnected() bool {
 // every I2C adapter belonging to a GPU that has a connected connector. This
 // keeps us from probing GPUs with no attached display, whose DDC buses can
 // block for hundreds of milliseconds waiting on an absent monitor.
-func (h Host) candidateBuses(connectors []DRMConnector) []int {
+func (h Host) candidateBuses(connectors []drmConnector) []int {
 	set := make(map[int]struct{})
 
 	for _, connector := range connectors {
@@ -37,11 +37,11 @@ func (h Host) candidateBuses(connectors []DRMConnector) []int {
 			continue
 		}
 
-		if connector.Bus != nil {
-			set[*connector.Bus] = struct{}{}
+		if connector.bus != nil {
+			set[*connector.bus] = struct{}{}
 		}
 
-		for _, bus := range h.gpuI2CBuses(connector.Name) {
+		for _, bus := range h.gpuI2CBuses(connector.name) {
 			set[bus] = struct{}{}
 		}
 	}
@@ -82,7 +82,7 @@ func (h Host) gpuI2CBuses(connectorName string) []int {
 }
 
 func (h Host) allI2CBuses() []int {
-	busPaths, _ := filepath.Glob(filepath.Join(h.DevPath, "i2c-*"))
+	busPaths, _ := filepath.Glob(filepath.Join(h.devPath, "i2c-*"))
 
 	buses := make([]int, 0, len(busPaths))
 	for _, busPath := range busPaths {
@@ -133,7 +133,7 @@ func (h Host) connectorDriver(connectorName string) string {
 // isSMBusAdapter reports whether an I2C bus is an SMBus adapter. SMBus is not
 // used for DDC/CI, so these buses are never worth probing.
 func (h Host) isSMBusAdapter(bus int) bool {
-	name, err := os.ReadFile(filepath.Join(h.I2CSysPath, fmt.Sprintf("i2c-%d", bus), "name"))
+	name, err := os.ReadFile(filepath.Join(h.i2cSysPath, fmt.Sprintf("i2c-%d", bus), "name"))
 	if err != nil {
 		return false
 	}
@@ -141,13 +141,13 @@ func (h Host) isSMBusAdapter(bus int) bool {
 	return strings.Contains(strings.ToLower(string(name)), "smbus")
 }
 
-func (h Host) findDRMConnectors() ([]DRMConnector, error) {
+func (h Host) findDRMConnectors() ([]drmConnector, error) {
 	entries, err := os.ReadDir(h.DRMPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading DRM path: %w", err)
 	}
 
-	connectors := make([]DRMConnector, 0)
+	connectors := make([]drmConnector, 0)
 	for _, entry := range entries {
 		name := entry.Name()
 
@@ -164,12 +164,12 @@ func (h Host) findDRMConnectors() ([]DRMConnector, error) {
 			continue
 		}
 
-		connector := DRMConnector{
-			Name:      name,
-			Connected: strings.TrimSpace(string(status)) == "connected",
+		connector := drmConnector{
+			name:      name,
+			connected: strings.TrimSpace(string(status)) == "connected",
 			// NVIDIA's proprietary driver sometimes reports "disconnected",
 			// so its status is ignored.
-			StatusReliable: h.connectorDriver(name) != "nvidia",
+			statusReliable: h.connectorDriver(name) != "nvidia",
 		}
 
 		ddcPath := filepath.Join(connectorPath, "ddc")
@@ -177,7 +177,7 @@ func (h Host) findDRMConnectors() ([]DRMConnector, error) {
 		target, err := filepath.EvalSymlinks(ddcPath)
 		if err == nil {
 			if bus, ok := busFromPath(target); ok {
-				connector.Bus = &bus
+				connector.bus = &bus
 			} else {
 				slog.Debug("Couldn't get I2C bus from path", "path", target)
 			}
@@ -187,7 +187,7 @@ func (h Host) findDRMConnectors() ([]DRMConnector, error) {
 		// Its EDID may allow us to associate it with an I2C monitor later.
 		edid, err := os.ReadFile(filepath.Join(connectorPath, "edid"))
 		if err == nil && len(edid) > 0 {
-			connector.EDID = edid
+			connector.edid = edid
 		}
 
 		connectors = append(connectors, connector)

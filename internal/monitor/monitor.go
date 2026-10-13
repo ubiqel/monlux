@@ -11,11 +11,11 @@ import (
 // process, so tests can substitute a fixture tree and fake buses.
 type Host struct {
 	DRMPath    string
-	I2CSysPath string
-	DevPath    string
+	i2cSysPath string
+	devPath    string
 
-	ReadEDID func(bus int) ([128]byte, error)
-	ProbeDDC func(bus int) bool
+	readEDID func(bus int) ([128]byte, error)
+	probeDDC func(bus int) bool
 	OpenBus  func(bus int) (Bus, error)
 
 	NoCache bool
@@ -30,10 +30,10 @@ type Bus interface {
 func DefaultHost() Host {
 	return Host{
 		DRMPath:    "/sys/class/drm",
-		I2CSysPath: "/sys/bus/i2c/devices",
-		DevPath:    "/dev",
-		ReadEDID:   readEDIDFromBus,
-		ProbeDDC:   probeDDCOnBus,
+		i2cSysPath: "/sys/bus/i2c/devices",
+		devPath:    "/dev",
+		readEDID:   readEDIDFromBus,
+		probeDDC:   probeDDCOnBus,
 		OpenBus:    openDDCBus,
 	}
 }
@@ -71,7 +71,7 @@ type BusReport struct {
 }
 
 type ScanResult struct {
-	Monitors []Monitor
+	monitors []Monitor
 	Buses    []BusReport
 	Unlinked []string
 }

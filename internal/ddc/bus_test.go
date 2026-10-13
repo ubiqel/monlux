@@ -570,7 +570,7 @@ func TestI2CStructsMatchKernelLayout(t *testing.T) {
 	is := is.New(t)
 
 	is.Equal(unsafe.Sizeof(i2cMsg{}), uintptr(16))
-	is.Equal(unsafe.Offsetof(i2cMsg{}.Buf), uintptr(8))
+	is.Equal(unsafe.Offsetof(i2cMsg{}.buf), uintptr(8))
 	is.Equal(unsafe.Sizeof(rdwrData{}), uintptr(16))
-	is.Equal(unsafe.Offsetof(rdwrData{}.NMsgs), uintptr(8))
+	is.Equal(unsafe.Offsetof(rdwrData{}.nmsgs), uintptr(8))
 }

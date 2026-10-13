@@ -115,9 +115,9 @@ func installFixture(t *testing.T, fx fixture) (Host, *[]int) {
 
 	host := Host{
 		DRMPath:    drm,
-		I2CSysPath: i2cSys,
-		DevPath:    dev,
-		ReadEDID: func(bus int) ([128]byte, error) {
+		i2cSysPath: i2cSys,
+		devPath:    dev,
+		readEDID: func(bus int) ([128]byte, error) {
 			edidReads = append(edidReads, bus)
 
 			b, ok := fx.buses[bus]
@@ -130,7 +130,7 @@ func installFixture(t *testing.T, fx fixture) (Host, *[]int) {
 
 			return e, nil
 		},
-		ProbeDDC: func(bus int) bool {
+		probeDDC: func(bus int) bool {
 			return fx.buses[bus].ddc
 		},
 	}
@@ -172,8 +172,8 @@ func reportFor(is *is.I, res ScanResult, bus int) BusReport {
 }
 
 func monitorBuses(res ScanResult) []int {
-	buses := make([]int, 0, len(res.Monitors))
-	for _, m := range res.Monitors {
+	buses := make([]int, 0, len(res.monitors))
+	for _, m := range res.monitors {
 		buses = append(buses, m.I2CBus)
 	}
 	slices.Sort(buses)

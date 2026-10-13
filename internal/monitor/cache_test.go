@@ -141,7 +141,7 @@ func TestMonitorsUsesFreshCache(t *testing.T) {
 
 	got := host.Monitors()
 
-	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{9})
+	is.Equal(monitorBuses(ScanResult{monitors: got}), []int{9})
 	is.Equal(len(*reads), 0)
 }
 
@@ -164,12 +164,12 @@ func TestMonitorsNoCacheIgnoresFreshCache(t *testing.T) {
 	})
 
 	got := host.Monitors()
-	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{4})
+	is.Equal(monitorBuses(ScanResult{monitors: got}), []int{4})
 	is.Equal(len(*reads), 1)
 
 	cached, err := readMonitorsCache()
 	is.NoErr(err)
-	is.Equal(monitorBuses(ScanResult{Monitors: cached.Monitors}), []int{9})
+	is.Equal(monitorBuses(ScanResult{monitors: cached.Monitors}), []int{9})
 }
 
 func TestMonitorsNoCacheDoesNotWrite(t *testing.T) {
@@ -185,7 +185,7 @@ func TestMonitorsNoCacheDoesNotWrite(t *testing.T) {
 	})
 	host.NoCache = true
 
-	is.Equal(monitorBuses(ScanResult{Monitors: host.Monitors()}), []int{4})
+	is.Equal(monitorBuses(ScanResult{monitors: host.Monitors()}), []int{4})
 	is.True(!cacheFileExists(t))
 }
 
@@ -207,11 +207,11 @@ func TestMonitorsRescansStaleCache(t *testing.T) {
 	})
 
 	got := host.Monitors()
-	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{4})
+	is.Equal(monitorBuses(ScanResult{monitors: got}), []int{4})
 
 	cached, err := readMonitorsCache()
 	is.NoErr(err)
-	is.Equal(monitorBuses(ScanResult{Monitors: cached.Monitors}), []int{4})
+	is.Equal(monitorBuses(ScanResult{monitors: cached.Monitors}), []int{4})
 }
 
 func TestMonitorsRescansWhenCacheIsFromFuture(t *testing.T) {
@@ -234,7 +234,7 @@ func TestMonitorsRescansWhenCacheIsFromFuture(t *testing.T) {
 	})
 
 	got := host.Monitors()
-	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{4})
+	is.Equal(monitorBuses(ScanResult{monitors: got}), []int{4})
 }
 
 func TestMonitorsScansWhenCacheIsUnreadable(t *testing.T) {
@@ -254,7 +254,7 @@ func TestMonitorsScansWhenCacheIsUnreadable(t *testing.T) {
 	mustMkdir(t, monitorsCachePath(t))
 
 	got := host.Monitors()
-	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{4})
+	is.Equal(monitorBuses(ScanResult{monitors: got}), []int{4})
 	is.Equal(len(*reads), 1)
 }
 
@@ -292,5 +292,5 @@ func TestMonitorsSurvivesCacheWriteFailure(t *testing.T) {
 	})
 
 	got := host.Monitors()
-	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{4})
+	is.Equal(monitorBuses(ScanResult{monitors: got}), []int{4})
 }

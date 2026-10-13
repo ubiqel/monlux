@@ -27,8 +27,8 @@ func TestEntryFresh(t *testing.T) {
 	}{
 		{"just updated", now, true},
 		{"within ttl", now.Add(-4 * time.Second), true},
-		{"exactly ttl", now.Add(-TTL), true},
-		{"one nanosecond past ttl", now.Add(-TTL - time.Nanosecond), false},
+		{"exactly ttl", now.Add(-ttl), true},
+		{"one nanosecond past ttl", now.Add(-ttl - time.Nanosecond), false},
 		{"expired", now.Add(-6 * time.Second), false},
 		{"updated in the future", now.Add(time.Second), false},
 	}
@@ -37,7 +37,7 @@ func TestEntryFresh(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			is := is.New(t)
 
-			is.Equal(Entry{UpdatedAt: tt.updated}.Fresh(now), tt.want)
+			is.Equal(entry{UpdatedAt: tt.updated}.fresh(now), tt.want)
 		})
 	}
 }
@@ -46,17 +46,17 @@ func TestStoreRoundTrip(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	Store(4, "A", 40, 100)
-	Store(5, "B", 60, 200)
+	store(4, "A", 40, 100)
+	store(5, "B", 60, 200)
 
-	is.Equal(len(LoadCache()), 2)
+	is.Equal(len(loadCache()), 2)
 
-	a, ok := Lookup(4, "A")
+	a, ok := lookup(4, "A")
 	is.True(ok)
 	is.Equal(a.Current, uint16(40))
 	is.Equal(a.Maximum, uint16(100))
 
-	b, ok := Lookup(5, "B")
+	b, ok := lookup(5, "B")
 	is.True(ok)
 	is.Equal(b.Current, uint16(60))
 	is.Equal(b.Maximum, uint16(200))
@@ -66,10 +66,10 @@ func TestStoreReplugResetsEntry(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	Store(4, "OLD", 40, 100)
-	Store(4, "NEW", 10, 100)
+	store(4, "OLD", 40, 100)
+	store(4, "NEW", 10, 100)
 
-	e, ok := Lookup(4, "NEW")
+	e, ok := lookup(4, "NEW")
 	is.True(ok)
 	is.Equal(e.Current, uint16(10))
 }
@@ -78,9 +78,9 @@ func TestLookupRejectsOtherIdentity(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	Store(4, "A", 40, 100)
+	store(4, "A", 40, 100)
 
-	_, ok := Lookup(4, "B")
+	_, ok := lookup(4, "B")
 	is.True(!ok)
 }
 
@@ -88,10 +88,10 @@ func TestForgetRemovesEntry(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	Store(4, "A", 40, 100)
-	Forget(4)
+	store(4, "A", 40, 100)
+	forget(4)
 
-	_, ok := Lookup(4, "A")
+	_, ok := lookup(4, "A")
 	is.True(!ok)
 }
 
@@ -99,10 +99,10 @@ func TestForgetAbsentBusIsNoop(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	Store(4, "A", 40, 100)
-	Forget(9)
+	store(4, "A", 40, 100)
+	forget(9)
 
-	_, ok := Lookup(4, "A")
+	_, ok := lookup(4, "A")
 	is.True(ok)
 }
 
@@ -110,14 +110,14 @@ func TestForgetKeepsOtherBuses(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	Store(4, "A", 40, 100)
-	Store(5, "B", 60, 200)
-	Forget(4)
+	store(4, "A", 40, 100)
+	store(5, "B", 60, 200)
+	forget(4)
 
-	_, ok := Lookup(4, "A")
+	_, ok := lookup(4, "A")
 	is.True(!ok)
 
-	b, ok := Lookup(5, "B")
+	b, ok := lookup(5, "B")
 	is.True(ok)
 	is.Equal(b.Current, uint16(60))
 }
@@ -126,9 +126,9 @@ func TestLookupMissingBus(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	Store(4, "A", 40, 100)
+	store(4, "A", 40, 100)
 
-	_, ok := Lookup(5, "A")
+	_, ok := lookup(5, "A")
 	is.True(!ok)
 }
 
@@ -136,9 +136,9 @@ func TestLookupRejectsZeroMaximum(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	Store(4, "A", 0, 0)
+	store(4, "A", 0, 0)
 
-	_, ok := Lookup(4, "A")
+	_, ok := lookup(4, "A")
 	is.True(!ok)
 }
 
@@ -146,13 +146,13 @@ func TestStoreSameIdentityUpdatesEntry(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	Store(4, "A", 40, 100)
-	first, ok := Lookup(4, "A")
+	store(4, "A", 40, 100)
+	first, ok := lookup(4, "A")
 	is.True(ok)
 
-	Store(4, "A", 50, 200)
+	store(4, "A", 50, 200)
 
-	e, ok := Lookup(4, "A")
+	e, ok := lookup(4, "A")
 	is.True(ok)
 	is.Equal(e.Current, uint16(50))
 	is.Equal(e.Maximum, uint16(200))
@@ -163,7 +163,7 @@ func TestLoadCacheMissingFileIsEmpty(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	c := LoadCache()
+	c := loadCache()
 	is.True(c != nil)
 	is.Equal(len(c), 0)
 }
@@ -173,11 +173,11 @@ func TestLoadCacheCorruptFileIsIgnored(t *testing.T) {
 	is := is.New(t)
 
 	writeCacheFile(t, []byte("{not json"))
-	is.Equal(len(LoadCache()), 0)
+	is.Equal(len(loadCache()), 0)
 
-	Store(4, "A", 40, 100)
+	store(4, "A", 40, 100)
 
-	_, ok := Lookup(4, "A")
+	_, ok := lookup(4, "A")
 	is.True(ok)
 }
 
@@ -188,9 +188,9 @@ func TestStoreAfterNullCacheFile(t *testing.T) {
 	// json.Unmarshal leaves a map nil for "null", and writing to it would panic.
 	writeCacheFile(t, []byte("null"))
 
-	Store(4, "A", 40, 100)
+	store(4, "A", 40, 100)
 
-	_, ok := Lookup(4, "A")
+	_, ok := lookup(4, "A")
 	is.True(ok)
 }
 
@@ -201,11 +201,11 @@ func TestStoreUnwritableCacheDir(t *testing.T) {
 	is.NoErr(os.WriteFile(blocker, []byte("x"), 0o600))
 	t.Setenv("XDG_CACHE_HOME", blocker)
 
-	is.True(SaveCache(Cache{}) != nil)
+	is.True(saveCache(fileCache{}) != nil)
 
-	Store(4, "A", 40, 100)
+	store(4, "A", 40, 100)
 
-	_, ok := Lookup(4, "A")
+	_, ok := lookup(4, "A")
 	is.True(!ok)
 }
 
@@ -215,14 +215,14 @@ func TestForgetUnwritableCacheDirDoesNotPanic(t *testing.T) {
 	is.NoErr(os.WriteFile(blocker, []byte("x"), 0o600))
 	t.Setenv("XDG_CACHE_HOME", blocker)
 
-	Forget(4)
+	forget(4)
 }
 
 func TestCacheFileFormat(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	Store(4, "A", 40, 100)
+	store(4, "A", 40, 100)
 
 	path, err := cache.Path(cacheName)
 	is.NoErr(err)

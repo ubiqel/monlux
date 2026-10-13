@@ -85,7 +85,7 @@ func TestScanFixtures(t *testing.T) {
 				buses: map[int]fxBus{4: {edid: edidA, ddc: false}},
 			},
 			check: func(is *is.I, res ScanResult, _ []int) {
-				is.Equal(len(res.Monitors), 0)
+				is.Equal(len(res.monitors), 0)
 
 				r := reportFor(is, res, 4)
 				is.True(r.Probed)
@@ -103,7 +103,7 @@ func TestScanFixtures(t *testing.T) {
 				buses: map[int]fxBus{4: {edid: edidA, ddc: true}},
 			},
 			check: func(is *is.I, res ScanResult, _ []int) {
-				is.Equal(len(res.Monitors), 0)
+				is.Equal(len(res.monitors), 0)
 
 				r := reportFor(is, res, 4)
 				is.True(r.Panel)
@@ -126,7 +126,7 @@ func TestScanFixtures(t *testing.T) {
 			check: func(is *is.I, res ScanResult, _ []int) {
 				is.Equal(monitorBuses(res), []int{4})
 
-				m := res.Monitors[0]
+				m := res.monitors[0]
 				is.True(m.DRMConnector != nil && *m.DRMConnector == "card1-DP-2")
 			},
 		},
@@ -146,7 +146,7 @@ func TestScanFixtures(t *testing.T) {
 			check: func(is *is.I, res ScanResult, _ []int) {
 				is.Equal(monitorBuses(res), []int{4, 5})
 
-				for _, m := range res.Monitors {
+				for _, m := range res.monitors {
 					is.True(m.DRMConnector == nil)
 				}
 
@@ -244,7 +244,7 @@ func TestScanFixtures(t *testing.T) {
 				buses: map[int]fxBus{4: {edid: edidBad[:], ddc: true}},
 			},
 			check: func(is *is.I, res ScanResult, _ []int) {
-				is.Equal(len(res.Monitors), 0)
+				is.Equal(len(res.monitors), 0)
 				is.Equal(reportFor(is, res, 4).Result, "EDID could not be parsed")
 			},
 		},
@@ -335,13 +335,13 @@ func TestSysfsEDIDAgrees(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		connector DRMConnector
+		connector drmConnector
 		want      bool
 	}{
-		{"same EDID", DRMConnector{EDID: same}, true},
-		{"same EDID with extension block", DRMConnector{EDID: append(slices.Clone(same), 0xAA, 0xBB)}, true},
-		{"different EDID (stale link)", DRMConnector{EDID: other[:]}, false},
-		{"no sysfs EDID", DRMConnector{}, true},
+		{"same EDID", drmConnector{edid: same}, true},
+		{"same EDID with extension block", drmConnector{edid: append(slices.Clone(same), 0xAA, 0xBB)}, true},
+		{"different EDID (stale link)", drmConnector{edid: other[:]}, false},
+		{"no sysfs EDID", drmConnector{}, true},
 	}
 
 	for _, tt := range tests {
@@ -395,12 +395,12 @@ func TestIsInternalPanel(t *testing.T) {
 func TestMayBeConnected(t *testing.T) {
 	tests := []struct {
 		name      string
-		connector DRMConnector
+		connector drmConnector
 		want      bool
 	}{
-		{"connected, reliable status", DRMConnector{Connected: true, StatusReliable: true}, true},
-		{"disconnected, reliable status", DRMConnector{Connected: false, StatusReliable: true}, false},
-		{"disconnected, unreliable status", DRMConnector{Connected: false, StatusReliable: false}, true},
+		{"connected, reliable status", drmConnector{connected: true, statusReliable: true}, true},
+		{"disconnected, reliable status", drmConnector{connected: false, statusReliable: true}, false},
+		{"disconnected, unreliable status", drmConnector{connected: false, statusReliable: false}, true},
 	}
 
 	for _, tt := range tests {

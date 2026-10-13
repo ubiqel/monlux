@@ -23,7 +23,7 @@ type Selector struct {
 }
 
 func (h Host) WithDisplay(sel Selector, fn func(bus Bus, m Monitor) error) error {
-	m, err := h.Resolve(sel)
+	m, err := h.resolve(sel)
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (h Host) DPMSState(m Monitor) (state string, asleep bool) {
 	return state, state != "" && state != "On"
 }
 
-func (h Host) Resolve(sel Selector) (Monitor, error) {
+func (h Host) resolve(sel Selector) (Monitor, error) {
 	switch sel.Type {
 	case IDTypeDRM, IDTypeEDID, IDTypeI2C:
 	default:

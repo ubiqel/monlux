@@ -24,7 +24,7 @@ func (h Host) Monitors() []Monitor {
 	if h.NoCache {
 		slog.Debug("Monitors cache disabled, scanning.")
 
-		return h.Scan().Monitors
+		return h.Scan().monitors
 	}
 
 	cached, err := readMonitorsCache()
@@ -47,7 +47,7 @@ func (h Host) Monitors() []Monitor {
 		slog.Warn("Failed to read monitors cache, scanning instead.", "error", err)
 	}
 
-	monitors := h.Scan().Monitors
+	monitors := h.Scan().monitors
 	if len(monitors) == 0 {
 		slog.Debug("Scan found no monitors, not caching the result.")
 

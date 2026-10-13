@@ -93,7 +93,7 @@ func TestResolve(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			is := is.New(t)
 
-			m, err := host.Resolve(tt.sel)
+			m, err := host.resolve(tt.sel)
 			if tt.wantErr != "" {
 				is.True(err != nil)
 				is.True(strings.Contains(err.Error(), tt.wantErr))
@@ -123,11 +123,11 @@ func TestResolveAmbiguousIdentity(t *testing.T) {
 	alphaID, ok := ddc.ParseIdentity(makeEDID("ALPHA"))
 	is.True(ok)
 
-	_, err := host.Resolve(Selector{Type: IDTypeEDID, Value: alphaID})
+	_, err := host.resolve(Selector{Type: IDTypeEDID, Value: alphaID})
 	is.True(err != nil)
 	is.True(strings.Contains(err.Error(), "matches 2 monitors"))
 
-	m, err := host.Resolve(Selector{Type: IDTypeI2C, Value: "5"})
+	m, err := host.resolve(Selector{Type: IDTypeI2C, Value: "5"})
 	is.NoErr(err)
 	is.Equal(m.I2CBus, 5)
 }
