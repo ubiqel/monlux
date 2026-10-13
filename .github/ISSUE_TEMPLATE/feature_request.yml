@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a new feature or improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the use case. Focus on the problem, not only the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like `monlux` to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other tools, scripts, or workarounds you've tried.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: search
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues and didn't find a duplicate.
+          required: true

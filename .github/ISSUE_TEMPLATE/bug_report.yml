@@ -1,0 +1,87 @@
+name: Bug report
+description: Report something that doesn't work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Running `monlux detect` first often shows the cause (see [Troubleshooting](https://github.com/ubiqel/monlux#troubleshooting)).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What went wrong, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `monlux ...`
+        2. See error
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: monlux version
+      description: Output of `monlux --version`
+      placeholder: e.g. v0.3.0
+    validations:
+      required: true
+
+  - type: input
+    id: system
+    attributes:
+      label: Linux distribution and kernel
+      placeholder: e.g. Arch Linux, kernel 6.10.4
+    validations:
+      required: true
+
+  - type: input
+    id: monitor
+    attributes:
+      label: Monitor model
+      placeholder: e.g. Dell U2723QE
+    validations:
+      required: false
+
+  - type: textarea
+    id: detect
+    attributes:
+      label: Output of `monlux detect`
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: no-cache
+    attributes:
+      label: Does the problem still happen with `--no-cache`?
+      options:
+        - "Yes"
+        - "No"
+        - "Not tried"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Output of the failing command run with `--debug`, if available.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: search
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues and didn't find a duplicate.
+          required: true
