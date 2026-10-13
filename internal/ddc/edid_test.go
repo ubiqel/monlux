@@ -1,10 +1,10 @@
-package i2c_test
+package ddc_test
 
 import (
 	"testing"
 
 	"github.com/matryer/is"
-	"github.com/ubiqel/monlux/internal/i2c"
+	"github.com/ubiqel/monlux/internal/ddc"
 )
 
 func TestParseIdentity(t *testing.T) {
@@ -27,7 +27,7 @@ func TestParseIdentity(t *testing.T) {
 		[]byte{'2', '3', '1', '3', '3', 'B', '0', '0', '0', '0', '2', '6', 0x0A},
 	)
 
-	identity, ok := i2c.ParseIdentity(edid[:])
+	identity, ok := ddc.ParseIdentity(edid[:])
 	is.Equal(ok, true)
 	is.Equal(identity, "GBT:M27Q P:23133B000026")
 }
@@ -45,7 +45,7 @@ func TestParseIdentityFallbacks(t *testing.T) {
 	withSerial[10], withSerial[11] = 0x18, 0x27 // product 0x2718
 	withSerial[12] = 0x01                       // serial 1
 
-	identity, ok := i2c.ParseIdentity(withSerial[:])
+	identity, ok := ddc.ParseIdentity(withSerial[:])
 	is.Equal(ok, true)
 	is.Equal(identity, "GBT:2718:1")
 
@@ -55,7 +55,7 @@ func TestParseIdentityFallbacks(t *testing.T) {
 	noSerial[8], noSerial[9] = 0x1C, 0x54
 	noSerial[10], noSerial[11] = 0x18, 0x27
 
-	identity, ok = i2c.ParseIdentity(noSerial[:])
+	identity, ok = ddc.ParseIdentity(noSerial[:])
 	is.Equal(ok, true)
 	is.Equal(identity, "GBT:2718:2718")
 }

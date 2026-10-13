@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ubiqel/monlux/internal/i2c"
+	"github.com/ubiqel/monlux/internal/ddc"
 	"github.com/ubiqel/monlux/internal/monitor"
 )
 
@@ -128,7 +128,7 @@ type Reading struct {
 }
 
 func Read(host monitor.Host, m monitor.Monitor, useCache bool) (Reading, error) {
-	bus, err := i2c.Open(m.I2CBus)
+	bus, err := ddc.Open(m.I2CBus)
 	if err != nil {
 		slog.Warn("Failed to open fd for I2C bus.", "bus", m.I2CBus, "error", err)
 

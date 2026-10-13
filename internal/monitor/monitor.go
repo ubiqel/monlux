@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/ubiqel/monlux/internal/i2c"
+	"github.com/ubiqel/monlux/internal/ddc"
 )
 
 // Host gives the package every path and hardware hook it uses outside the
@@ -58,7 +58,7 @@ type ScanResult struct {
 }
 
 func readEDIDFromBus(busNum int) ([128]byte, error) {
-	bus, err := i2c.Open(busNum)
+	bus, err := ddc.Open(busNum)
 	if err != nil {
 		return [128]byte{}, fmt.Errorf("opening bus: %w", err)
 	}
@@ -73,7 +73,7 @@ func readEDIDFromBus(busNum int) ([128]byte, error) {
 }
 
 func probeDDCOnBus(busNum int) bool {
-	bus, err := i2c.Open(busNum)
+	bus, err := ddc.Open(busNum)
 	if err != nil {
 		slog.Debug("Failed to open fd for I2C bus.", "error", err, "bus", busNum)
 

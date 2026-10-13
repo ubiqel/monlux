@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ubiqel/monlux/internal/i2c"
+	"github.com/ubiqel/monlux/internal/ddc"
 )
 
 func (h Host) Scan() ScanResult {
@@ -43,7 +43,7 @@ func (h Host) Scan() ScanResult {
 			continue
 		}
 
-		identity, ok := i2c.ParseIdentity(edid[:])
+		identity, ok := ddc.ParseIdentity(edid[:])
 		if !ok {
 			slog.Debug("Failed to parse identity from EDID.", "bus", bus)
 			res.Buses[idx].Result = "EDID could not be parsed"

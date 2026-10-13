@@ -1,4 +1,4 @@
-package i2c
+package ddc
 
 // Seeds are the implied address byte at the other end of the frame: 0x6E (the
 // monitor's write address) for host-to-monitor, 0x50 (the host) for

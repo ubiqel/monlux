@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ubiqel/monlux/internal/i2c"
+	"github.com/ubiqel/monlux/internal/ddc"
 )
 
 type IDType int
@@ -24,13 +24,13 @@ type Selector struct {
 	Value string
 }
 
-func (h Host) WithDisplay(sel Selector, fn func(bus *i2c.Bus, m Monitor) error) error {
+func (h Host) WithDisplay(sel Selector, fn func(bus *ddc.Bus, m Monitor) error) error {
 	m, err := h.Resolve(sel)
 	if err != nil {
 		return err
 	}
 
-	bus, err := i2c.Open(m.I2CBus)
+	bus, err := ddc.Open(m.I2CBus)
 	if err != nil {
 		return fmt.Errorf("opening fd for bus '%v': %w", m.I2CBus, err)
 	}

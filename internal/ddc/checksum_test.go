@@ -1,4 +1,4 @@
-package i2c
+package ddc
 
 import (
 	"testing"
