@@ -1,9 +1,7 @@
 package monitor
 
 import (
-	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,18 +11,28 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// IDType is the kind of identity a Selector matches on.
+type IDType int
+
 const (
-	idTypeDRM  = "drm"
-	idTypeEDID = "edid"
-	idTypeI2C  = "i2c"
+	IDTypeDRM  IDType = iota // DRM connector name, e.g. card1-DP-2
+	IDTypeEDID               // EDID identity
+	IDTypeI2C                // I2C bus number
 )
 
-// WithDisplay resolves a <monitor> argument, opens its I2C bus and runs fn with
-// the fd and the monitor. The fd is always closed. If fn fails while the display
-// is asleep, the error says so, since a sleeping display is the usual reason
-// DDC/CI fails.
-func (h Host) WithDisplay(id string, fn func(fd int, m Monitor) error) error {
-	m, err := h.Resolve(id)
+// Selector names the monitor to act on by one of its identities.
+type Selector struct {
+	Type IDType
+	// Value is the connector name, EDID identity or, for IDTypeI2C, the bus
+	// number in decimal.
+	Value string
+}
+
+// WithDisplay resolves sel, opens its I2C bus and runs fn with the fd and the
+// monitor. The fd is always closed. If fn fails while the display is asleep,
+// the error says so, since a sleeping display is the usual reason DDC/CI fails.
+func (h Host) WithDisplay(sel Selector, fn func(fd int, m Monitor) error) error {
+	m, err := h.Resolve(sel)
 	if err != nil {
 		return err
 	}
@@ -63,39 +71,29 @@ func (h Host) DPMSState(m Monitor) (state string, asleep bool) {
 	return state, state != "" && state != "On"
 }
 
-// Resolve finds the single monitor that a <monitor> argument names. The argument
-// is "<id>" (a DRM connector), or "<type>:<id>" with type drm, edid or i2c.
-func (h Host) Resolve(id string) (Monitor, error) {
-	displayID, displayIDType, err := parseDisplayID(id)
-	if err != nil {
-		return Monitor{}, fmt.Errorf("parsing monitor argument: %w", err)
-	}
-
+// Resolve finds the single monitor that sel names.
+func (h Host) Resolve(sel Selector) (Monitor, error) {
 	monitors := h.Monitors()
 
 	// Collect every match: an identity can be shared by several monitors, and
 	// silently picking one would send the command to the wrong display.
 	var matches []Monitor
 	for _, m := range monitors {
-		switch displayIDType {
-		case idTypeDRM:
-			if m.DRMConnector == nil || *m.DRMConnector != displayID {
+		switch sel.Type {
+		case IDTypeDRM:
+			if m.DRMConnector == nil || *m.DRMConnector != sel.Value {
 				continue
 			}
-		case idTypeEDID:
-			if m.EDIDIdentity != displayID {
+		case IDTypeEDID:
+			if m.EDIDIdentity != sel.Value {
 				continue
 			}
-		case idTypeI2C:
-			// in this branch we just check that bus exists.
-			if strconv.Itoa(m.I2CBus) != displayID {
+		case IDTypeI2C:
+			if strconv.Itoa(m.I2CBus) != sel.Value {
 				continue
 			}
 		default:
-			// should be unrecheable.
-			slog.Debug("Reached unrecheable branch in switch statement.")
-
-			continue
+			return Monitor{}, fmt.Errorf("unknown id type %d", sel.Type)
 		}
 
 		matches = append(matches, m)
@@ -103,7 +101,7 @@ func (h Host) Resolve(id string) (Monitor, error) {
 
 	switch len(matches) {
 	case 0:
-		return Monitor{}, fmt.Errorf("no monitor matches %q; run 'monlux list' to see detected monitors", id)
+		return Monitor{}, fmt.Errorf("no monitor matches %q; run 'monlux list' to see detected monitors", sel.Value)
 	case 1:
 		return matches[0], nil
 	default:
@@ -114,27 +112,7 @@ func (h Host) Resolve(id string) (Monitor, error) {
 
 		return Monitor{}, fmt.Errorf(
 			"%q matches %d monitors (I2C buses %v); select one with i2c:<bus>",
-			id, len(matches), buses,
+			sel.Value, len(matches), buses,
 		)
-	}
-}
-
-func parseDisplayID(input string) (id, tp string, err error) {
-	if input == "" {
-		return "", "", errors.New("missing monitor argument")
-	}
-
-	parts := strings.SplitN(strings.TrimSpace(input), ":", 2)
-	if len(parts) == 1 {
-		return parts[0], idTypeDRM, nil
-	}
-
-	tp = parts[0]
-	id = parts[1]
-	switch tp {
-	case idTypeDRM, idTypeEDID, idTypeI2C:
-		return id, tp, nil
-	default:
-		return "", "", fmt.Errorf("unknown id type %q, want drm, edid or i2c", tp)
 	}
 }

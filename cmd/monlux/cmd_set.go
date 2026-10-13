@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ubiqel/monlux/internal/brightness"
 	"github.com/ubiqel/monlux/internal/monitor"
@@ -12,19 +11,7 @@ import (
 func runSetCmd(_ context.Context, cmd *cli.Command) error {
 	useCache := !cmd.Bool(noCacheFlag)
 
-	return displayHost(cmd).WithDisplay(cmd.StringArg(monitorArg), func(fd int, m monitor.Monitor) error {
-		// Convert percent to real value (it's possible that max is not 100).
-		_, maximum, err := brightness.Current(fd, m, useCache)
-		if err != nil {
-			return fmt.Errorf("reading brightness from i2c bus '%v': %w", m.I2CBus, err)
-		}
-		pct := int(cmd.UintArg(percentArg))
-		rawVal := uint16(int(maximum) * brightness.Clamp(pct, 0, 100) / 100)
-
-		if err := brightness.Write(fd, m, rawVal, maximum, useCache); err != nil {
-			return fmt.Errorf("setting new brightness value via i2c bus '%v': %w", m.I2CBus, err)
-		}
-
-		return nil
+	return withDisplay(cmd, func(fd int, m monitor.Monitor) error {
+		return brightness.SetPercent(fd, m, int(cmd.UintArg(percentArg)), useCache)
 	})
 }

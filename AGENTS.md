@@ -25,15 +25,17 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 - `cmd/monlux/`: the `package main` CLI on `urfave/cli/v3`. Only CLI wiring and output formatting live here.
   - `main.go` wires commands, the global `--debug` flag, the lock and profiling.
   - `flags.go` defines flags shared by several subcommands.
-  - `cmd_*.go`: one file per subcommand. Each one reads its arguments and calls into `internal/`. Logic specific to one subcommand (e.g. `cycle`'s step parsing) stays in its `cmd_*.go` file.
+  - `monitor_arg.go`: parses the `<monitor>` argument (`drm:`, `edid:`, `i2c:` prefixes) into a `monitor.Selector`, and `withDisplay`, which runs a command on the selected display.
+  - `cmd_*.go`: one file per subcommand. Each one reads its arguments and calls into `internal/`. Domain logic does not belong here, even if only one subcommand uses it.
 - `internal/monitor/`: finds monitors and selects one. Everything it touches outside the process is in `Host` (see Gotchas).
   - `monitor.go`: `Host`, `DefaultHost()`, `Monitor`, `ScanResult`, `BusReport`, and the real EDID/DDC hooks.
   - `discovery.go`: DRM connectors and candidate I2C buses from sysfs.
   - `scan.go`: `Host.Scan()`, plus connector association and conflict resolution. `ScanResult` gives per-bus reasons, which `detect` prints.
   - `cache.go`: `Host.Monitors()`, the cached monitor list.
-  - `display.go`: `Host.Resolve` (`<monitor>` argument matching), `Host.WithDisplay` (open bus, run action, DPMS error wording), `Host.DPMSState`.
+  - `display.go`: `Selector` (typed monitor identity), `Host.Resolve` (selector matching), `Host.WithDisplay` (open bus, run action, DPMS error wording), `Host.DPMSState`.
 - `internal/brightness/`: reads and sets brightness.
-  - `brightness.go`: `Current`, `Write`, `Observe` (cache-aware), and `Clamp`.
+  - `brightness.go`: `Current`, `Write`, `Observe` (cache-aware), `Read` (for `list`), `SetPercent`, `Step` (read-modify-write), and `Clamp`.
+  - `cycle.go`: `Cycle` (validated by `NewCycle`, applied with `Apply`) and its next-step rule.
   - `cache.go`: brightness cache entries, TTL, and recent-write rules.
 - `internal/i2c/`: DDC/CI and EDID over the I2C ioctl. `Open(bus)` opens `/dev/i2c-N`. Also VCP (brightness) access and checksum code.
 - `internal/cache/`: file storage under `$XDG_CACHE_HOME/monlux/` only (`Path`, `ReadJSON`, `WriteJSON`, `ErrNotExist`). It has no cache rules of its own.
@@ -44,7 +46,7 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 
 - **Lock serializes everything.** Every command holds the global lock, so concurrent `monlux` calls queue. A hung I2C transaction blocks all others.
 - **Writes hit real hardware.** `set`, `up`, `down` and `cycle` change the actual monitor, even when you're only experimenting. Use `list` or `get` to inspect.
-- **Monitor IDs.** The `<monitor>` argument defaults to a DRM connector name (e.g. `card1-DP-2`). Prefixes `drm:`, `edid:`, `i2c:` select other identity types. Multiple matches are an error, and you must pick one with `i2c:<bus>`.
+- **Monitor IDs.** The `<monitor>` argument defaults to a DRM connector name (e.g. `card1-DP-2`). Prefixes `drm:`, `edid:`, `i2c:` select other identity types (parsed in `cmd/monlux/monitor_arg.go`, not in core). Multiple matches are an error, and you must pick one with `i2c:<bus>`.
 - **Cycle steps.** `--steps` must be strictly ascending or strictly descending, with no duplicates. The first two entries set the direction. Forward moves to the nearest higher step, and backward to the nearest lower one. Past either end, it wraps to the opposite end.
 - **Caches can return stale values.**
   - Monitor list is cached in `$XDG_CACHE_HOME/monlux/monitors.json` for 60 s (`internal/monitor`). Scans that find no monitors aren't cached.

@@ -3,16 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sync"
 
-	"github.com/ubiqel/monlux/internal/i2c"
+	"github.com/ubiqel/monlux/internal/brightness"
 	"github.com/urfave/cli/v3"
-	"golang.org/x/sys/unix"
 )
 
 func runListCmd(_ context.Context, cmd *cli.Command) error {
 	host := displayHost(cmd)
+	useCache := !cmd.Bool(noCacheFlag)
 	monitors := host.Monitors()
 
 	type row struct {
@@ -22,8 +21,6 @@ func runListCmd(_ context.Context, cmd *cli.Command) error {
 		edid       string
 	}
 
-	// TODO: don't like all this shit. refactor
-	//
 	// We make parallel requests here to get the brightness, but they may still
 	// end up sequential (lock inside driver). For example, it happens on
 	// Nvidia card with two monitors connected. On my machine sequential and
@@ -41,21 +38,11 @@ func runListCmd(_ context.Context, cmd *cli.Command) error {
 				r.drm = *m.DRMConnector
 			}
 
-			fd, err := i2c.Open(m.I2CBus)
-			if err != nil {
-				slog.Warn("Failed to open fd for I2C bus", "bus", m.I2CBus)
-				r.brightness = "?"
-				rows[i] = r
-
-				return
-			}
-
-			pct, _, _, err := i2c.ReadBrightness(fd)
-			_ = unix.Close(fd)
-			switch _, asleep := host.DPMSState(m); {
+			reading, err := brightness.Read(host, m, useCache)
+			switch {
 			case err == nil:
-				r.brightness = fmt.Sprintf("%d%%", pct)
-			case asleep:
+				r.brightness = fmt.Sprintf("%d%%", reading.Percent)
+			case reading.Asleep:
 				r.brightness = "asleep"
 			default:
 				r.brightness = "?"
