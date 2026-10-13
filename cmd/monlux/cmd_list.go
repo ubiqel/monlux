@@ -3,78 +3,84 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"sync"
+	"text/tabwriter"
 
 	"github.com/ubiqel/monlux/internal/brightness"
+	"github.com/ubiqel/monlux/internal/monitor"
 	"github.com/urfave/cli/v3"
 )
+
+type listRow struct {
+	bus     int
+	drm     string
+	edid    string
+	reading brightness.Reading
+	err     error
+}
 
 func runListCmd(_ context.Context, cmd *cli.Command) error {
 	host := displayHost(cmd)
 	useCache := !cmd.Bool(noCacheFlag)
-	monitors := host.Monitors()
 
-	type row struct {
-		drm        string
-		i2c        string
-		brightness string
-		edid       string
-	}
+	rows := fetchListRows(host, host.Monitors(), useCache)
 
-	// The driver may serialize these reads anyway (e.g. Nvidia with two monitors),
+	return renderList(os.Stdout, rows)
+}
+
+func fetchListRows(host monitor.Host, monitors []monitor.Monitor, useCache bool) []listRow {
+	// The driver may serialize these reads anyway (e.g. Nvidia with 2+ monitors),
 	// but parallel reads are never slower.
 	var wg sync.WaitGroup
-	rows := make([]row, len(monitors))
+	rows := make([]listRow, len(monitors))
 	for i, m := range monitors {
 		wg.Go(func() {
-			r := row{
-				drm:  "-",
-				i2c:  fmt.Sprintf("/dev/i2c-%d", m.I2CBus),
-				edid: m.EDIDIdentity,
-			}
+			r := listRow{bus: m.I2CBus, edid: m.EDIDIdentity}
 			if m.DRMConnector != nil {
 				r.drm = *m.DRMConnector
 			}
-
-			reading, err := brightness.Read(host, m, useCache)
-			switch {
-			case err == nil:
-				r.brightness = fmt.Sprintf("%d%%", reading.Percent)
-			case reading.Asleep:
-				r.brightness = "asleep"
-			default:
-				r.brightness = "?"
-			}
+			r.reading, r.err = brightness.Read(host, m, useCache)
 			rows[i] = r
 		})
 	}
 	wg.Wait()
 
-	headers := []string{"I2C", "DRM", "EDID", "BRIGHTNESS"}
-	colWidths := make([]int, len(headers))
-	for i, h := range headers {
-		colWidths[i] = len(h)
+	return rows
+}
+
+func renderList(w io.Writer, rows []listRow) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+
+	if _, err := fmt.Fprintln(tw, "I2C\tDRM\tEDID\tBRIGHTNESS"); err != nil {
+		return err
 	}
 	for _, r := range rows {
-		colWidths[0] = max(colWidths[0], len(r.i2c))
-		colWidths[1] = max(colWidths[1], len(r.drm))
-		colWidths[2] = max(colWidths[2], len(r.edid))
-		colWidths[3] = max(colWidths[3], len(r.brightness))
+		if _, err := fmt.Fprintf(tw, "/dev/i2c-%d\t%s\t%s\t%s\n",
+			r.bus, drmText(r), r.edid, brightnessText(r)); err != nil {
+			return err
+		}
 	}
 
-	fmt.Printf("%-*s  %-*s  %-*s  %s\n",
-		colWidths[0], headers[0],
-		colWidths[1], headers[1],
-		colWidths[2], headers[2],
-		headers[3])
+	return tw.Flush()
+}
 
-	for _, r := range rows {
-		fmt.Printf("%-*s  %-*s  %-*s  %s\n",
-			colWidths[0], r.i2c,
-			colWidths[1], r.drm,
-			colWidths[2], r.edid,
-			r.brightness)
+func drmText(r listRow) string {
+	if r.drm == "" {
+		return "-"
 	}
 
-	return nil
+	return r.drm
+}
+
+func brightnessText(r listRow) string {
+	switch {
+	case r.err == nil:
+		return fmt.Sprintf("%d%%", r.reading.Percent)
+	case r.reading.Asleep:
+		return "asleep"
+	default:
+		return "?"
+	}
 }
