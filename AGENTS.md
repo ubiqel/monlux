@@ -40,9 +40,9 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
   - `cache.go`: `Host.Monitors()`, the cached monitor list.
   - `display.go`: `Selector` (typed monitor identity), `Host.Resolve` (selector matching), `Host.WithDisplay` (open bus, run action, DPMS error wording), `Host.DPMSState`.
 - `internal/brightness/`: reads and sets brightness.
-  - `brightness.go`: `Current`, `Write`, `Observe` (cache-aware), `Read` (for `list`), `SetPercent`, `Step` (read-modify-write), and `Clamp`.
+  - `brightness.go`: `Current` (cache-aware, used by `get`), `Write`, `Read` (for `list`), `SetPercent`, `Step` (read-modify-write), and `Clamp`.
   - `cycle.go`: `Cycle` (validated by `NewCycle`, applied with `Apply`) and its next-step rule.
-  - `cache.go`: brightness cache entries, TTL, and recent-write rules.
+  - `cache.go`: brightness cache entries and TTL.
 - `internal/i2c/`: DDC/CI and EDID over the I2C ioctl. `Open(bus)` opens `/dev/i2c-N`. Also VCP (brightness) access and checksum code.
 - `internal/cache/`: file storage under `$XDG_CACHE_HOME/monlux/` only (`Path`, `ReadJSON`, `WriteJSON`, `ErrNotExist`). It has no cache rules of its own.
 - `internal/lock/`: exclusive `flock` on `$XDG_RUNTIME_DIR/monlux.lock` (fallback `$TMPDIR/monlux-<uid>.lock`), mode 0600, taken in `main`'s `Before` hook for every invocation.
@@ -56,7 +56,7 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 - **Cycle steps.** `--steps` must be strictly ascending or strictly descending, with no duplicates. The first two entries set the direction. Forward moves to the nearest higher step, and backward to the nearest lower one. Past either end, it wraps to the opposite end.
 - **Caches can return stale values.**
   - Monitor list is cached in `$XDG_CACHE_HOME/monlux/monitors.json` for 60 s (`internal/monitor`). Scans that find no monitors aren't cached.
-  - Brightness is cached in `brightness.json` for 10 s, keyed by I2C bus and EDID identity (`internal/brightness`).
+  - Brightness is cached in `brightness.json` for 5 s, keyed by I2C bus and EDID identity (`internal/brightness`). `get` reads through the cache too, so external changes (monitor buttons, other tools) can show up to 5 s late.
   - When debugging brightness or detection, add the root `--no-cache` flag (it skips both caches, and works before or after the subcommand), or delete the files under `$XDG_CACHE_HOME/monlux/`.
 - **Failures on a sleeping display.** `Host.WithDisplay` reports DPMS "asleep" when a DDC operation fails. Check the display state before debugging the I2C code.
 - **Hardware is injected through `monitor.Host`.** It holds the sysfs paths (`DRMPath`, `I2CSysPath`, `DevPath`) and the hardware hooks (`ReadEDID`, `ProbeDDC`). Production code uses `monitor.DefaultHost()`. There are no package globals to swap.

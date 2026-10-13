@@ -11,16 +11,13 @@ import (
 
 const cacheName = "brightness.json"
 
-const TTL = 10 * time.Second
-
-const recentWriteWindow = time.Second
+const TTL = 5 * time.Second
 
 type Entry struct {
 	Identity  string    `json:"identity"`
 	Current   uint16    `json:"current"`
 	Maximum   uint16    `json:"maximum"`
 	UpdatedAt time.Time `json:"updated_at"`
-	WrittenAt time.Time `json:"written_at"`
 }
 
 type Cache map[int]Entry
@@ -45,9 +42,8 @@ func Lookup(bus int, identity string) (Entry, bool) {
 	return e, true
 }
 
-func Store(bus int, identity string, current, maximum uint16, written bool) {
+func Store(bus int, identity string, current, maximum uint16) {
 	c := LoadCache()
-	now := time.Now()
 
 	e := c[bus]
 	if e.Identity != identity {
@@ -56,10 +52,7 @@ func Store(bus int, identity string, current, maximum uint16, written bool) {
 	}
 	e.Current = current
 	e.Maximum = maximum
-	e.UpdatedAt = now
-	if written {
-		e.WrittenAt = now
-	}
+	e.UpdatedAt = time.Now()
 	c[bus] = e
 
 	if err := SaveCache(c); err != nil {
@@ -68,7 +61,7 @@ func Store(bus int, identity string, current, maximum uint16, written bool) {
 		return
 	}
 
-	slog.Debug("Saved brightness cache.", "bus", bus, "raw", current, "maximum", maximum, "written", written)
+	slog.Debug("Saved brightness cache.", "bus", bus, "raw", current, "maximum", maximum)
 }
 
 func Forget(bus int) {
@@ -116,19 +109,6 @@ func (e Entry) Fresh(now time.Time) bool {
 	age := now.Sub(e.UpdatedAt)
 
 	return age >= 0 && age <= TTL
-}
-
-// DisagreesWithRecentWrite reports whether raw, read from the monitor, differs
-// from a value written moments ago. Such a read probably happened before the
-// monitor applied the write.
-func (e Entry) DisagreesWithRecentWrite(raw uint16, now time.Time) bool {
-	if e.WrittenAt.IsZero() {
-		return false
-	}
-
-	age := now.Sub(e.WrittenAt)
-
-	return age >= 0 && age <= recentWriteWindow && raw != e.Current
 }
 
 func (e Entry) Percent() int {

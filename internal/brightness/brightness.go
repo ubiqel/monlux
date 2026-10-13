@@ -31,7 +31,7 @@ func Current(fd int, m monitor.Monitor, useCache bool) (pct int, maximum uint16,
 	}
 
 	if useCache {
-		Store(m.I2CBus, m.EDIDIdentity, raw, maximum, false)
+		Store(m.I2CBus, m.EDIDIdentity, raw, maximum)
 	}
 
 	return pct, maximum, nil
@@ -53,7 +53,7 @@ func Write(fd int, m monitor.Monitor, raw, maximum uint16, useCache bool) error 
 	}
 
 	if useCache {
-		Store(m.I2CBus, m.EDIDIdentity, raw, maximum, true)
+		Store(m.I2CBus, m.EDIDIdentity, raw, maximum)
 	}
 
 	return nil
@@ -104,21 +104,6 @@ func Read(host monitor.Host, m monitor.Monitor, useCache bool) (Reading, error) 
 	}
 
 	return Reading{Percent: pct}, nil
-}
-
-// Observe returns the percentage to report for a value just read from m, and
-// records the value. A read that disagrees with a write made moments ago is
-// ignored, since the monitor probably hasn't applied the write yet.
-func Observe(m monitor.Monitor, pct int, raw, maximum uint16) int {
-	if e, ok := Lookup(m.I2CBus, m.EDIDIdentity); ok && e.DisagreesWithRecentWrite(raw, time.Now()) {
-		slog.Debug("Ignoring brightness read that disagrees with a recent write.", "bus", m.I2CBus, "raw", raw, "written_raw", e.Current)
-
-		return e.Percent()
-	}
-
-	Store(m.I2CBus, m.EDIDIdentity, raw, maximum, false)
-
-	return pct
 }
 
 func Clamp[T cmp.Ordered](value, minimum, maximum T) T {

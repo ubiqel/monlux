@@ -61,7 +61,7 @@ func TestWriteFailureForgetsEntry(t *testing.T) {
 	is := is.New(t)
 
 	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
-	Store(m.I2CBus, m.EDIDIdentity, 40, 100, false)
+	Store(m.I2CBus, m.EDIDIdentity, 40, 100)
 
 	err := Write(noDevice, m, 50, 100, true)
 	is.True(err != nil)
@@ -75,37 +75,9 @@ func TestWriteWithoutCacheLeavesCacheAlone(t *testing.T) {
 	is := is.New(t)
 
 	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
-	Store(m.I2CBus, m.EDIDIdentity, 40, 100, false)
+	Store(m.I2CBus, m.EDIDIdentity, 40, 100)
 
 	is.True(Write(noDevice, m, 50, 100, false) != nil)
-
-	e, ok := Lookup(m.I2CBus, m.EDIDIdentity)
-	is.True(ok)
-	is.Equal(e.Current, uint16(40))
-}
-
-func TestObserveIgnoresReadRightAfterWrite(t *testing.T) {
-	isolateCache(t)
-	is := is.New(t)
-
-	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
-	Store(m.I2CBus, m.EDIDIdentity, 50, 100, true)
-
-	pct := Observe(m, 40, 40, 100)
-	is.Equal(pct, 50)
-
-	e, _ := Lookup(m.I2CBus, m.EDIDIdentity)
-	is.Equal(e.Current, uint16(50))
-}
-
-func TestObserveRecordsRead(t *testing.T) {
-	isolateCache(t)
-	is := is.New(t)
-
-	m := monitor.Monitor{I2CBus: 4, EDIDIdentity: "A"}
-
-	pct := Observe(m, 40, 40, 100)
-	is.Equal(pct, 40)
 
 	e, ok := Lookup(m.I2CBus, m.EDIDIdentity)
 	is.True(ok)
