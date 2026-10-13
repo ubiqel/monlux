@@ -72,6 +72,7 @@ aurs:
       install -Dm644 ./README.md "${pkgdir}/usr/share/doc/monlux/README.md"
       install -Dm644 ./packaging/60-monlux-i2c.rules "${pkgdir}/usr/lib/udev/rules.d/60-monlux-i2c.rules"
       install -Dm644 ./packaging/monlux.conf "${pkgdir}/usr/lib/modules-load.d/monlux.conf"
+    install: ./packaging/monlux.install
     git_url: ssh://aur@aur.archlinux.org/monlux-bin.git
     private_key: "{{ .Env.AUR_KEY }}"
 
@@ -92,5 +93,6 @@ aur_sources:
       install -Dm644 ./README.md "${pkgdir}/usr/share/doc/monlux/README.md"
       install -Dm644 ./packaging/60-monlux-i2c.rules "${pkgdir}/usr/lib/udev/rules.d/60-monlux-i2c.rules"
       install -Dm644 ./packaging/monlux.conf "${pkgdir}/usr/lib/modules-load.d/monlux.conf"
+    install: ./packaging/monlux.install
     git_url: ssh://aur@aur.archlinux.org/monlux.git
     private_key: "{{ .Env.AUR_KEY }}"
