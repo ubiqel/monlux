@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -21,6 +22,7 @@ func TestScanFixtures(t *testing.T) {
 	edidA := makeEDID("ALPHA")
 	edidB := makeEDID("BRAVO")
 	edidOld := makeEDID("OLD")
+	edidBad := edidWith(1) // no valid EDID header, so it can't be parsed
 
 	tests := []struct {
 		name  string
@@ -201,6 +203,102 @@ func TestScanFixtures(t *testing.T) {
 				is.Equal(monitorBuses(res), []int{4})
 			},
 		},
+		{
+			name: "SMBus adapters are skipped without DRM information",
+			fx: fixture{
+				buses: map[int]fxBus{
+					4: {edid: edidA, ddc: true},
+					7: {edid: edidB, ddc: true, smbus: true},
+				},
+			},
+			check: func(is *is.I, res ScanResult, reads []int) {
+				is.True(!slices.Contains(reads, 7))
+				is.Equal(monitorBuses(res), []int{4})
+			},
+		},
+		{
+			name: "GPU with no attached display is not probed",
+			fx: fixture{
+				gpus: []fxGPU{
+					{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}},
+					{pci: "0000:04:00.0", driver: "amdgpu", card: "card1", buses: []int{6}},
+				},
+				connectors: []fxConnector{
+					{name: "card0-DP-2", gpu: 0, status: "connected", edid: edidA, ddcBus: 4},
+					{name: "card1-DP-1", gpu: 1, status: "disconnected", edid: edidB, ddcBus: -1},
+				},
+				buses: map[int]fxBus{
+					4: {edid: edidA, ddc: true},
+					6: {edid: edidB, ddc: true},
+				},
+			},
+			check: func(is *is.I, res ScanResult, reads []int) {
+				is.True(!slices.Contains(reads, 6))
+				is.Equal(monitorBuses(res), []int{4})
+				is.Equal(len(res.Unlinked), 0)
+			},
+		},
+		{
+			name: "EDID that can't be parsed is reported",
+			fx: fixture{
+				buses: map[int]fxBus{4: {edid: edidBad[:], ddc: true}},
+			},
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(len(res.Monitors), 0)
+				is.Equal(reportFor(is, res, 4).Result, "EDID could not be parsed")
+			},
+		},
+		{
+			name: "EDID twin does not take a connector already linked by DDC",
+			fx: fixture{
+				gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4, 5}}},
+				connectors: []fxConnector{
+					{name: "card0-DP-2", gpu: 0, status: "connected", edid: edidA, ddcBus: 4},
+				},
+				buses: map[int]fxBus{
+					4: {edid: edidA, ddc: true},
+					5: {edid: edidA, ddc: true},
+				},
+			},
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(monitorBuses(res), []int{4, 5})
+
+				r4 := reportFor(is, res, 4)
+				is.Equal(r4.Connector, "card0-DP-2")
+				is.Equal(r4.Link, "ddc")
+
+				r5 := reportFor(is, res, 5)
+				is.Equal(r5.Connector, "")
+				is.Equal(r5.Link, "")
+				is.Equal(r5.Result, "monitor")
+
+				is.Equal(len(res.Unlinked), 0)
+			},
+		},
+		{
+			name: "two DDC monitors with one EDID-matching connector are both left unlinked",
+			fx: fixture{
+				gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4, 5}}},
+				connectors: []fxConnector{
+					{name: "card0-DP-2", gpu: 0, status: "connected", edid: edidA, ddcBus: -1},
+				},
+				buses: map[int]fxBus{
+					4: {edid: edidA, ddc: true},
+					5: {edid: edidA, ddc: true},
+				},
+			},
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(monitorBuses(res), []int{4, 5})
+
+				for _, bus := range []int{4, 5} {
+					r := reportFor(is, res, bus)
+					is.Equal(r.Connector, "")
+					is.Equal(r.Result, "monitor, connector ambiguous")
+				}
+
+				is.Equal(res.Unlinked, []string{"card0-DP-2"})
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -212,6 +310,19 @@ func TestScanFixtures(t *testing.T) {
 			tt.check(is, res, *reads)
 		})
 	}
+}
+
+func TestScanWithoutDRMPath(t *testing.T) {
+	is := is.New(t)
+
+	host, reads := installFixture(t, fixture{
+		buses: map[int]fxBus{4: {edid: makeEDID("ALPHA"), ddc: true}},
+	})
+	host.DRMPath = filepath.Join(t.TempDir(), "missing")
+
+	res := host.Scan()
+	is.Equal(monitorBuses(res), []int{4})
+	is.Equal(*reads, []int{4})
 }
 
 func TestSysfsEDIDAgrees(t *testing.T) {

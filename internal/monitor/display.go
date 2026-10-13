@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/ubiqel/monlux/internal/ddc"
 )
 
 type IDType int
@@ -24,13 +22,13 @@ type Selector struct {
 	Value string
 }
 
-func (h Host) WithDisplay(sel Selector, fn func(bus *ddc.Bus, m Monitor) error) error {
+func (h Host) WithDisplay(sel Selector, fn func(bus Bus, m Monitor) error) error {
 	m, err := h.Resolve(sel)
 	if err != nil {
 		return err
 	}
 
-	bus, err := ddc.Open(m.I2CBus)
+	bus, err := h.OpenBus(m.I2CBus)
 	if err != nil {
 		return fmt.Errorf("opening fd for bus '%v': %w", m.I2CBus, err)
 	}
@@ -65,6 +63,12 @@ func (h Host) DPMSState(m Monitor) (state string, asleep bool) {
 }
 
 func (h Host) Resolve(sel Selector) (Monitor, error) {
+	switch sel.Type {
+	case IDTypeDRM, IDTypeEDID, IDTypeI2C:
+	default:
+		return Monitor{}, fmt.Errorf("unknown id type %d", sel.Type)
+	}
+
 	monitors := h.Monitors()
 
 	// Collect every match: an identity can be shared by several monitors, and
@@ -84,8 +88,6 @@ func (h Host) Resolve(sel Selector) (Monitor, error) {
 			if strconv.Itoa(m.I2CBus) != sel.Value {
 				continue
 			}
-		default:
-			return Monitor{}, fmt.Errorf("unknown id type %d", sel.Type)
 		}
 
 		matches = append(matches, m)

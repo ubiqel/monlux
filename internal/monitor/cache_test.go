@@ -214,6 +214,50 @@ func TestMonitorsRescansStaleCache(t *testing.T) {
 	is.Equal(monitorBuses(ScanResult{Monitors: cached.Monitors}), []int{4})
 }
 
+func TestMonitorsRescansWhenCacheIsFromFuture(t *testing.T) {
+	isolateCache(t)
+	is := is.New(t)
+
+	host, _ := installFixture(t, fixture{
+		gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}}},
+		connectors: []fxConnector{
+			{name: "card0-DP-2", gpu: 0, status: "connected", edid: makeEDID("ALPHA"), ddcBus: 4},
+		},
+		buses: map[int]fxBus{4: {edid: makeEDID("ALPHA"), ddc: true}},
+	})
+
+	// A timestamp ahead of the clock (for example after a clock change) can't
+	// be trusted, so the cache is ignored.
+	writeCacheFile(t, monitorsCache{
+		Monitors:  []Monitor{{I2CBus: 9, EDIDIdentity: "CACHED"}},
+		UpdatedAt: time.Now().Add(time.Hour),
+	})
+
+	got := host.Monitors()
+	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{4})
+}
+
+func TestMonitorsScansWhenCacheIsUnreadable(t *testing.T) {
+	isolateCache(t)
+	is := is.New(t)
+
+	host, reads := installFixture(t, fixture{
+		gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}}},
+		connectors: []fxConnector{
+			{name: "card0-DP-2", gpu: 0, status: "connected", edid: makeEDID("ALPHA"), ddcBus: 4},
+		},
+		buses: map[int]fxBus{4: {edid: makeEDID("ALPHA"), ddc: true}},
+	})
+
+	// A directory where the cache file should be fails the read with an error
+	// other than "not exist", which must not stop the scan.
+	mustMkdir(t, monitorsCachePath(t))
+
+	got := host.Monitors()
+	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{4})
+	is.Equal(len(*reads), 1)
+}
+
 func TestMonitorsDoesNotCacheEmptyResult(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)

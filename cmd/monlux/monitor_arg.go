@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ubiqel/monlux/internal/ddc"
 	"github.com/ubiqel/monlux/internal/monitor"
 	"github.com/urfave/cli/v3"
 )
@@ -32,7 +31,7 @@ func parseMonitorArg(input string) (monitor.Selector, error) {
 	}
 }
 
-func withDisplay(cmd *cli.Command, fn func(bus *ddc.Bus, m monitor.Monitor) error) error {
+func withDisplay(cmd *cli.Command, fn func(bus monitor.Bus, m monitor.Monitor) error) error {
 	sel, err := parseMonitorArg(cmd.StringArg(monitorArg))
 	if err != nil {
 		return fmt.Errorf("parsing monitor argument: %w", err)
