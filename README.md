@@ -22,6 +22,19 @@ I built it to control monitor brightness from [Waybar](https://github.com/Alexay
 
 Download the archive for your architecture (`amd64` or `arm64`) from the [releases page](https://github.com/ubiqel/monlux/releases), extract it, and put `monlux` on your `PATH`.
 
+### AUR
+
+Arch Linux and derivatives have two packages in the AUR:
+
+- `monlux-bin`: the prebuilt release binary.
+- `monlux`: builds from the source of the latest release.
+
+With an AUR helper such as `paru` or `yay`:
+
+```sh
+yay -S monlux-bin
+```
+
 ### Go
 
 ```sh
@@ -38,7 +51,7 @@ task build.release   # writes build/monlux
 
 ## Usage
 
-```sh
+```
 monlux list                      # detected monitors and their brightness
 monlux get <monitor>             # print brightness, e.g. 25
 monlux set <monitor> <percent>   # set brightness
@@ -97,7 +110,7 @@ Common errors:
 
 ## Permissions
 
-`monlux` needs read and write access to `/dev/i2c-*`. Use one of these:
+`monlux` needs read and write access to `/dev/i2c-*`. The [AUR packages](#aur) set this up automatically. For other installs, use one of these:
 
 - **Desktop login (typical):** distros that ship the `ddcutil` or `i2c-tools` udev rules, and the `monlux` AUR package, tag I2C devices with `uaccess`. systemd-logind then grants access to the user of the active local session. Check with `getfacl /dev/i2c-*`: the entry `user:<you>:rw-` means access is granted. `ls -l /dev/i2c-*` shows a `+` on devices that have an ACL. This does not apply over SSH or outside a local session. After installing the rule, reboot or run `sudo udevadm control --reload && sudo udevadm trigger`.
 - **`i2c` group:** add your user to the group and log in again:
