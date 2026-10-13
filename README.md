@@ -2,7 +2,6 @@
 
 [![CI](https://github.com/ubiqel/monlux/actions/workflows/ci.yml/badge.svg)](https://github.com/ubiqel/monlux/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/ubiqel/monlux/badge.svg?branch=main)](https://coveralls.io/github/ubiqel/monlux?branch=main)
-[![License](https://img.shields.io/github/license/ubiqel/monlux)](LICENSE)
 
 Control external monitor brightness over DDC/CI on Linux.
 
