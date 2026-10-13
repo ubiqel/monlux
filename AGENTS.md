@@ -40,12 +40,12 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
   - `cache.go`: `Host.Monitors()`, the cached monitor list.
   - `display.go`: `Selector` (typed monitor identity), `Host.Resolve` (selector matching), `Host.WithDisplay` (open bus, run action, DPMS error wording), `Host.DPMSState`.
 - `internal/brightness/`: reads and sets brightness.
-  - `brightness.go`: `Current` (cache-aware, used by `get`), `Write`, `Read` (for `list`), `SetPercent`, `Step` (read-modify-write), and `Clamp`. The `Device` interface is what it needs from a monitor; `*i2c.Bus` implements it. Values are stored and stepped in raw monitor units. `Percent` and `Raw` convert to and from percent, rounding to nearest.
+  - `brightness.go`: `Current` (cache-aware, used by `get`), `Write`, `Read` (for `list`), `SetPercent`, `Step` (read-modify-write), and `Clamp`. The `Device` interface is what it needs from a monitor; `*ddc.Bus` implements it. Values are stored and stepped in raw monitor units. `Percent` and `Raw` convert to and from percent, rounding to nearest.
   - `cycle.go`: `Cycle` (validated by `NewCycle`, applied with `Apply`) and its next-step rule.
   - `cache.go`: brightness cache entries and TTL.
-- `internal/i2c/`: DDC/CI and EDID over the I2C ioctl. `Open(bus)` returns a `*Bus` for `/dev/i2c-N`, and the caller closes it.
+- `internal/ddc/`: DDC/CI and EDID over the I2C ioctl. `Open(bus)` returns a `*Bus` for `/dev/i2c-N`, and the caller closes it.
   - `bus.go`: the `Bus` type and the ioctl transfer. `Bus.xfer` is a seam that tests replace.
-  - `ddc.go`: DDC/CI frames, reply parsing, and the retry policy. Only garbled replies and I/O errors are retried.
+  - `ddc.go`: DDC/CI frames, reply parsing, and the retry policy. Like ddcutil, garbled and null replies and most bus errors are retried. EIO, ENXIO, EBADF and EBUSY fail at once.
   - `vcp.go`: brightness get/set, `ProbeDDC`, and `ErrUnsupportedFeature`.
   - `edid.go`: `ReadEDID` (rejects a bad header or checksum, as ddcutil does) and `ParseIdentity`. `checksum.go` holds the XOR checksum.
 - `internal/cache/`: file storage under `$XDG_CACHE_HOME/monlux/` only (`Path`, `ReadJSON`, `WriteJSON`, `ErrNotExist`). It has no cache rules of its own.
@@ -64,7 +64,7 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
   - When debugging brightness or detection, add the root `--no-cache` flag (it skips both caches, and works before or after the subcommand), or delete the files under `$XDG_CACHE_HOME/monlux/`.
 - **Failures on a sleeping display.** `Host.WithDisplay` reports DPMS "asleep" when a DDC operation fails. Check the display state before debugging the I2C code.
 - **Hardware is injected through `monitor.Host`.** It holds the sysfs paths (`DRMPath`, `I2CSysPath`, `DevPath`) and the hardware hooks (`ReadEDID`, `ProbeDDC`). Production code uses `monitor.DefaultHost()`. There are no package globals to swap.
-- **Tests never touch real hardware.** `internal/monitor/fixture_test.go` (`installFixture`) builds a fake sysfs and `/dev` tree in a temp dir and returns a `Host` wired to fake buses. Keep new tests hermetic the same way. Brightness tests use a fake `brightness.Device`. i2c tests script replies through `newScriptedBus` (`internal/i2c/bus_test.go`).
+- **Tests never touch real hardware.** `internal/monitor/fixture_test.go` (`installFixture`) builds a fake sysfs and `/dev` tree in a temp dir and returns a `Host` wired to fake buses. Keep new tests hermetic the same way. Brightness tests use a fake `brightness.Device`. ddc tests script replies through `newScriptedBus` (`internal/ddc/bus_test.go`).
 - **Cache tests isolate the cache.** Call `t.Setenv("XDG_CACHE_HOME", t.TempDir())` yourself. `installFixture` doesn't set it. `t.Setenv` panics if the test or any parent calls `t.Parallel()`, so tests that touch the cache must stay sequential (see `isolateCache` in `internal/brightness/cache_test.go`).
 - **Tests run serially by default.** Most tests finish in well under a millisecond, so `t.Parallel()` only adds noise. Add it only when a test blocks for a long time (e.g. sleeps or real I/O waits) and no shared state or `t.Setenv` is involved.
 - Tests use `github.com/matryer/is`.

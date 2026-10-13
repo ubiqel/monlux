@@ -62,3 +62,10 @@ func TestChecksumRead(t *testing.T) {
 		})
 	}
 }
+
+func TestChecksumOfNoDataIsSeed(t *testing.T) {
+	is := is.New(t)
+
+	is.Equal(checksum(seedHostToMonitor, nil), seedHostToMonitor)
+	is.Equal(checksum(seedMonitorToHost, nil), seedMonitorToHost)
+}

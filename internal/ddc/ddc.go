@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -42,6 +43,10 @@ func request(opcode byte, payload ...byte) []byte {
 
 // buf can be longer than the frame; the length byte says how much of it is real.
 func parseReply(buf []byte) ([]byte, error) {
+	if len(buf) < 3 {
+		return nil, fmt.Errorf("reply of %d bytes is shorter than a frame", len(buf))
+	}
+
 	if buf[0] != monitorSource {
 		return nil, fmt.Errorf("%w: source byte 0x%02X", errRetryable, buf[0])
 	}
@@ -76,8 +81,19 @@ func (b *Bus) retry(name string, op func() error) error {
 	return err
 }
 
-// A garbled reply or an I/O error may clear up on retry. An unsupported answer
-// or a missing device won't, so those fail at once.
+// Matches ddcutil: garbled and null replies and most bus errors are retried,
+// but the errnos below fail at once. ddcutil doesn't retry those.
+var fatalErrnos = []unix.Errno{unix.EIO, unix.ENXIO, unix.EBADF, unix.EBUSY}
+
 func retryable(err error) bool {
-	return errors.Is(err, errRetryable) || errors.Is(err, unix.EIO) || errors.Is(err, unix.EREMOTEIO)
+	if errors.Is(err, errRetryable) {
+		return true
+	}
+
+	var errno unix.Errno
+	if !errors.As(err, &errno) {
+		return false
+	}
+
+	return !slices.Contains(fatalErrnos, errno)
 }

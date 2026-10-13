@@ -83,7 +83,7 @@ func ParseIdentity(edid []byte) (identity string, ok bool) {
 
 	for base := edidDescriptors; base < edidDescriptors+edidDescriptorNum*edidDescriptorSize; base += edidDescriptorSize {
 		d := edid[base : base+edidDescriptorSize]
-		if d[0] != 0x00 || d[1] != 0x00 {
+		if d[0] != 0x00 || d[1] != 0x00 || d[2] != 0x00 || d[4] != 0x00 {
 			continue
 		}
 
@@ -119,16 +119,25 @@ func manufacturerID(id uint16) string {
 	return string([]byte{letter(10), letter(5), letter(0)})
 }
 
+// Text ends at the first LF or NUL, as in ddcutil. Bytes outside printable ASCII
+// are written as <xHH>, which keeps the identity valid UTF-8 for the JSON cache.
 func descriptorText(raw []byte) string {
-	end := len(raw)
-	for end > 0 {
-		c := raw[end-1]
-		if c != ' ' && c != 0x0A && c != 0x00 {
-			break
-		}
-
-		end--
+	if i := bytes.IndexAny(raw, "\n\x00"); i >= 0 {
+		raw = raw[:i]
 	}
 
-	return string(raw[:end])
+	raw = bytes.TrimRight(raw, " ")
+
+	var b strings.Builder
+	for _, c := range raw {
+		if c < 0x20 || c >= 0x80 {
+			fmt.Fprintf(&b, "<x%02x>", c)
+
+			continue
+		}
+
+		b.WriteByte(c)
+	}
+
+	return b.String()
 }

@@ -1,6 +1,7 @@
 package ddc
 
 import (
+	"errors"
 	"fmt"
 	"structs"
 	"time"
@@ -64,8 +65,16 @@ func (b *Bus) Close() error {
 }
 
 func ioctlTransfer(fd int, msgs []message) error {
+	if len(msgs) == 0 {
+		return errors.New("i2c transfer without messages")
+	}
+
 	raw := make([]i2cMsg, len(msgs))
 	for i, m := range msgs {
+		if len(m.buf) == 0 {
+			return fmt.Errorf("i2c message to 0x%02X without bytes", m.addr)
+		}
+
 		var flags uint16
 		if m.read {
 			flags = i2cMRead

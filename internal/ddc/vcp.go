@@ -10,6 +10,11 @@ import (
 // the VCP feature. Retrying can't change that answer.
 var ErrUnsupportedFeature = errors.New("VCP feature not supported")
 
+// errNullResponse is retried like a garbled reply. Only when every attempt is
+// null does GetBrightness call the feature unsupported, which is how ddcutil
+// treats monitors that answer unsupported features with a null message.
+var errNullResponse = fmt.Errorf("%w: null response", errRetryable)
+
 const (
 	vcpBrightness        = byte(0x10)
 	vcpResultUnsupported = byte(0x01)
@@ -19,6 +24,10 @@ const (
 // between monitors.
 func (b *Bus) GetBrightness() (current, maximum uint16, err error) {
 	v, err := b.getVCP(vcpBrightness)
+	if errors.Is(err, errNullResponse) {
+		return 0, 0, fmt.Errorf("%w: null response for 0x%02X", ErrUnsupportedFeature, vcpBrightness)
+	}
+
 	if err != nil {
 		return 0, 0, err
 	}
@@ -37,7 +46,8 @@ func (b *Bus) SetBrightness(value uint16) error {
 }
 
 // ProbeDDC reports whether the monitor answers DDC/CI. A monitor that rejects
-// only the brightness feature still answers, so it counts.
+// only the brightness feature still answers, so it counts. A null reply doesn't,
+// since ddcutil treats that as no answer.
 func (b *Bus) ProbeDDC() bool {
 	_, err := b.getVCP(vcpBrightness)
 
@@ -77,7 +87,7 @@ func (b *Bus) getVCPOnce(code byte) (vcpValue, error) {
 
 	// Some monitors answer a feature they don't know with an empty frame.
 	if len(payload) == 0 {
-		return vcpValue{}, fmt.Errorf("%w: null response for 0x%02X", ErrUnsupportedFeature, code)
+		return vcpValue{}, fmt.Errorf("%w for 0x%02X", errNullResponse, code)
 	}
 
 	if len(payload) != 8 || payload[0] != opGetVCPReply || payload[2] != code {
@@ -122,6 +132,14 @@ func (b *Bus) setVCPOnce(code byte, value uint16) error {
 
 	if len(payload) > 0 && payload[0] != setReplyEcho {
 		return fmt.Errorf("%w: set reply opcode 0x%02X", errRetryable, payload[0])
+	}
+
+	if len(payload) > 1 && payload[1] != 0x00 {
+		if payload[1] == vcpResultUnsupported {
+			return fmt.Errorf("%w: 0x%02X", ErrUnsupportedFeature, code)
+		}
+
+		return fmt.Errorf("%w: set result 0x%02X for 0x%02X", errRetryable, payload[1], code)
 	}
 
 	return nil
