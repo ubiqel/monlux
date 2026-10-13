@@ -11,28 +11,25 @@ import (
 	"github.com/matryer/is"
 )
 
-// fxGPU is a GPU in a fixture tree.
 type fxGPU struct {
-	pci    string // PCI address, e.g. "0000:01:00.0"
-	driver string // bound driver, e.g. "nvidia" or "amdgpu"
-	card   string // DRM card name, e.g. "card1"
-	buses  []int  // I2C adapters under this GPU; each must also be in fixture.buses
+	pci    string
+	driver string
+	card   string
+	buses  []int // each must also be in fixture.buses
 }
 
-// fxConnector is a DRM connector in a fixture tree.
 type fxConnector struct {
-	name   string // e.g. "card1-DP-3"
-	gpu    int    // index into fixture.gpus
-	status string // sysfs status: "connected" or "disconnected"
-	edid   []byte // sysfs edid; nil leaves the file empty
-	ddcBus int    // direct "ddc" link to this bus; -1 for none
+	name   string
+	gpu    int
+	status string
+	edid   []byte // nil leaves the file empty
+	ddcBus int    // -1 for no direct "ddc" link
 }
 
-// fxBus is an I2C bus in a fixture tree.
 type fxBus struct {
-	edid  []byte // EDID the bus returns; nil makes the EDID read fail
-	ddc   bool   // whether DDC/CI answers on this bus
-	smbus bool   // adapter is named as SMBus
+	edid  []byte // nil makes the EDID read fail
+	ddc   bool
+	smbus bool
 }
 
 type fixture struct {
@@ -41,8 +38,6 @@ type fixture struct {
 	buses      map[int]fxBus
 }
 
-// makeEDID builds a minimal 128-byte EDID with the given name descriptor.
-// Different names give different EDIDs.
 func makeEDID(name string) []byte {
 	e := make([]byte, 128)
 	copy(e, []byte{0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00})
@@ -50,17 +45,15 @@ func makeEDID(name string) []byte {
 	// Manufacturer "GBT" packed as three 5-bit letters.
 	mfg := uint16('G'-'A'+1)<<10 | uint16('B'-'A'+1)<<5 | uint16('T'-'A'+1)
 	e[8], e[9] = byte(mfg>>8), byte(mfg)
-	e[10], e[11] = 0x34, 0x12 // product code
+	e[10], e[11] = 0x34, 0x12
 
-	e[54+3] = 0xFC // monitor name descriptor
+	e[54+3] = 0xFC
 	copy(e[54+5:], name+"\n")
 
 	return e
 }
 
-// installFixture builds a fake sysfs and /dev tree in a temp directory and
-// returns a Host that scans it, with the fake buses in place of hardware. The
-// returned slice records every bus whose EDID was read.
+// The returned slice records every bus whose EDID was read.
 func installFixture(t *testing.T, fx fixture) (Host, *[]int) {
 	t.Helper()
 
@@ -166,7 +159,6 @@ func mustSymlink(t *testing.T, target, link string) {
 	is.NoErr(os.Symlink(target, link))
 }
 
-// reportFor returns the report for a bus, failing the test if there is none.
 func reportFor(is *is.I, res ScanResult, bus int) BusReport {
 	for _, r := range res.Buses {
 		if r.Bus == bus {
@@ -179,7 +171,6 @@ func reportFor(is *is.I, res ScanResult, bus int) BusReport {
 	return BusReport{}
 }
 
-// monitorBuses returns the buses of the monitors found, sorted.
 func monitorBuses(res ScanResult) []int {
 	buses := make([]int, 0, len(res.Monitors))
 	for _, m := range res.Monitors {

@@ -11,7 +11,6 @@ import (
 
 const monitorsCacheName = "monitors.json"
 
-// monitorsCacheTTL is how long a scan result is reused before scanning again.
 const monitorsCacheTTL = 60 * time.Second
 
 type monitorsCache struct {
@@ -19,10 +18,8 @@ type monitorsCache struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Monitors returns the monitors on the host. It reuses a recent scan from the
-// cache and scans again otherwise. Scans that find nothing aren't cached, so
-// a monitor that is plugged in later is still found. With NoCache set, it always
-// scans and touches no cache file.
+// Monitors returns the host's monitors, from the cache when it is fresh. Scans
+// that find nothing aren't cached, so a monitor plugged in later is still found.
 func (h Host) Monitors() []Monitor {
 	if h.NoCache {
 		slog.Debug("Monitors cache disabled, scanning.")

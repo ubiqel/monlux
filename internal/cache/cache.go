@@ -12,15 +12,12 @@ import (
 	"path/filepath"
 )
 
-// appDirName names the directory under the user's cache directory. It matches
-// the CLI name.
 const appDirName = "monlux"
 
 // ErrNotExist means there is no usable cache file. It is returned for a missing
 // file and for a corrupted one, which is removed.
 var ErrNotExist = errors.New("cache file does not exist")
 
-// Path returns the location of the named cache file, creating its directory.
 func Path(name string) (string, error) {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
@@ -35,8 +32,6 @@ func Path(name string) (string, error) {
 	return filepath.Join(appCacheDir, name), nil
 }
 
-// ReadJSON decodes the named cache file into v. It returns ErrNotExist if the
-// file is missing or corrupted.
 func ReadJSON(name string, v any) error {
 	path, err := Path(name)
 	if err != nil {

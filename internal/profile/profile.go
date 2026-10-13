@@ -10,9 +10,6 @@ import (
 	"time"
 )
 
-// StartProfiling writes a CPU profile and an execution trace for one run into
-// the user's cache directory, named after the subcommand and the start time.
-// The returned function stops both and reports where the files are.
 func StartProfiling(cliName, commandName string) (stop func(), err error) {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {

@@ -104,8 +104,6 @@ func TestCycleNextBackward(t *testing.T) {
 }
 
 func TestCycleNextBackwardUnsorted(t *testing.T) {
-	// Steps need not be evenly spaced, so the nearest lower step is found by
-	// value.
 	c, err := NewCycle([]uint{100, 70, 50, 0})
 	is := is.New(t)
 	is.NoErr(err)

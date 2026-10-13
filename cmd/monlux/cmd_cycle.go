@@ -29,8 +29,6 @@ func runCycleCmd(_ context.Context, cmd *cli.Command) error {
 	})
 }
 
-// parseCycleSteps splits a comma-separated list of percentages, such as
-// "0,50,100". The values are checked by brightness.NewCycle.
 func parseCycleSteps(input string) ([]uint, error) {
 	parts := strings.Split(input, ",")
 	steps := make([]uint, 0, len(parts))

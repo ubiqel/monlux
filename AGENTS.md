@@ -20,6 +20,12 @@ Tasks are defined in `Taskfile.yml` (run with `task <name>`):
 - Project-wide exclusions live in `.golangci.yaml`
 - Use an inline `//nolint:<linter> // reason` only for a single, isolated case (e.g. G103 on the ioctl call). If a pattern repeats, add a config exclusion instead.
 
+## Comments
+
+- Write a comment only when it explains *why* something is done, or documents a *gotcha* the code can't show. Don't restate what the code does, and don't describe a function's signature or parameters.
+- Package and exported-identifier doc comments are optional. Add one only when it documents a gotcha, and start it with the identifier's name.
+- Inline `//nolint:` directives and `//go:` directives stay, with their reasons.
+
 ## Layout
 
 - `cmd/monlux/`: the `package main` CLI on `urfave/cli/v3`. Only CLI wiring and output formatting live here.

@@ -21,10 +21,8 @@ func runListCmd(_ context.Context, cmd *cli.Command) error {
 		edid       string
 	}
 
-	// We make parallel requests here to get the brightness, but they may still
-	// end up sequential (lock inside driver). For example, it happens on
-	// Nvidia card with two monitors connected. On my machine sequential and
-	// parallel implementation perform the same so i've kept parallel version.
+	// The driver may serialize these reads anyway (e.g. Nvidia with two monitors),
+	// but parallel reads are never slower.
 	var wg sync.WaitGroup
 	rows := make([]row, len(monitors))
 	for i, m := range monitors {
@@ -52,7 +50,6 @@ func runListCmd(_ context.Context, cmd *cli.Command) error {
 	}
 	wg.Wait()
 
-	// Each ID column holds a value that can be passed as the <monitor> argument.
 	headers := []string{"I2C", "DRM", "EDID", "BRIGHTNESS"}
 	colWidths := make([]int, len(headers))
 	for i, h := range headers {

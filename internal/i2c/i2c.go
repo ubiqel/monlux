@@ -118,7 +118,6 @@ func setVcp(fd int, code byte, value uint16) error {
 		}
 		slog.Debug("SetVCP request failed", "error", err, "vcp_code", code)
 
-		// No point sleeping once the final attempt has been made.
 		if attempt < vcpRetries-1 {
 			slog.Debug("SetVCP sleep before next retry")
 			time.Sleep(vcpRetryDelay)
@@ -145,14 +144,14 @@ func setVcpOnce(fd int, code byte, value uint16) error {
 	// than assuming a fixed frame. Some firmwares ACK with a zero-length
 	// message (no opcode), others echo opcode 0x04 and a result.
 	dataLen := int(reply[1] & 0x7F)
-	total := 2 + dataLen + 1 // source + length + data + checksum
+	total := 2 + dataLen + 1
 	if total > len(reply) {
 		return errors.New("io error")
 	}
 	if checksumRead(reply[:total-1]) != reply[total-1] {
 		return errors.New("io error")
 	}
-	if dataLen >= 1 && reply[2] != 0x04 { // Set VCP reply opcode
+	if dataLen >= 1 && reply[2] != 0x04 {
 		return errors.New("io error")
 	}
 
@@ -170,8 +169,6 @@ type VcpValue struct {
 // VCP feature is not supported. Retrying cannot change that answer.
 var ErrUnsupportedFeature = errors.New("VCP feature not supported")
 
-// errVCPError is returned when a monitor reports a VCP error other than
-// "unsupported feature".
 var errVCPError = errors.New("VCP error")
 
 func getVcp(fd int, code byte) (val VcpValue, err error) {
@@ -187,7 +184,6 @@ func getVcp(fd int, code byte) (val VcpValue, err error) {
 			return VcpValue{}, err
 		}
 
-		// No point sleeping once the final attempt has been made.
 		if attempt < vcpRetries-1 {
 			slog.Debug("GetVCP sleep before next retry")
 			time.Sleep(vcpRetryDelay)
@@ -223,7 +219,7 @@ func getVcpOnce(fd int, code byte) (val VcpValue, err error) {
 	if checksumRead(reply[:10]) != reply[10] {
 		return VcpValue{}, errors.New("invalid checksum")
 	}
-	if reply[2] != 0x02 || reply[4] != code { // get reply, right code
+	if reply[2] != 0x02 || reply[4] != code {
 		return VcpValue{}, errors.New("invalid reply")
 	}
 	// reply[3] is the DDC/CI result code: 0x00 means no error while 0x01 means

@@ -9,8 +9,6 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// parseMonitorArg parses a <monitor> argument. It is either a DRM connector
-// name, or "<type>:<id>" with type drm, edid or i2c.
 func parseMonitorArg(input string) (monitor.Selector, error) {
 	if input == "" {
 		return monitor.Selector{}, errors.New("missing monitor argument")
@@ -33,7 +31,6 @@ func parseMonitorArg(input string) (monitor.Selector, error) {
 	}
 }
 
-// withDisplay parses the <monitor> argument of cmd and runs fn on that display.
 func withDisplay(cmd *cli.Command, fn func(fd int, m monitor.Monitor) error) error {
 	sel, err := parseMonitorArg(cmd.StringArg(monitorArg))
 	if err != nil {

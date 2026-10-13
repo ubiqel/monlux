@@ -9,19 +9,15 @@ import (
 	"strings"
 )
 
-// DRMConnector is a connected or connectable output of a GPU, as seen in sysfs.
 type DRMConnector struct {
 	Name string
 	Bus  *int
 	EDID []byte
-	// Connected is the connector's sysfs status. It's only meaningful when
-	// StatusReliable is true.
+	// Connected is only meaningful when StatusReliable is true.
 	Connected      bool
 	StatusReliable bool
 }
 
-// mayBeConnected reports whether a monitor could be attached to the connector.
-// Connectors whose status can't be trusted are always considered.
 func (c DRMConnector) mayBeConnected() bool {
 	return c.Connected || !c.StatusReliable
 }
@@ -58,8 +54,6 @@ func (h Host) candidateBuses(connectors []DRMConnector) []int {
 	return buses
 }
 
-// gpuI2CBuses returns the I2C adapters attached to the GPU that owns the
-// given DRM connector.
 func (h Host) gpuI2CBuses(connectorName string) []int {
 	gpuPath, err := h.gpuDevicePath(connectorName)
 	if err != nil {
@@ -87,7 +81,6 @@ func (h Host) gpuI2CBuses(connectorName string) []int {
 	return buses
 }
 
-// allI2CBuses returns every i2c-* bus device.
 func (h Host) allI2CBuses() []int {
 	busPaths, _ := filepath.Glob(filepath.Join(h.DevPath, "i2c-*"))
 
@@ -110,7 +103,6 @@ func (h Host) allI2CBuses() []int {
 	return buses
 }
 
-// gpuDevicePath returns the PCI device of the GPU that owns a DRM connector.
 func (h Host) gpuDevicePath(connectorName string) (string, error) {
 	devicePath := filepath.Join(h.DRMPath, connectorName, "device")
 
@@ -124,8 +116,6 @@ func (h Host) gpuDevicePath(connectorName string) (string, error) {
 	return filepath.Dir(filepath.Dir(cardPath)), nil
 }
 
-// connectorDriver returns the kernel driver bound to the GPU that owns the
-// connector (e.g. "amdgpu" or "nvidia"), or "" if it can't be determined.
 func (h Host) connectorDriver(connectorName string) string {
 	gpuPath, err := h.gpuDevicePath(connectorName)
 	if err != nil {
@@ -169,7 +159,6 @@ func (h Host) findDRMConnectors() ([]DRMConnector, error) {
 
 		connectorPath := filepath.Join(h.DRMPath, name)
 
-		// A DRM connector has a "status" attribute.
 		status, err := os.ReadFile(filepath.Join(connectorPath, "status"))
 		if err != nil {
 			continue
@@ -183,7 +172,6 @@ func (h Host) findDRMConnectors() ([]DRMConnector, error) {
 			StatusReliable: h.connectorDriver(name) != "nvidia",
 		}
 
-		// First try the kernel's direct connector -> I2C mapping.
 		ddcPath := filepath.Join(connectorPath, "ddc")
 
 		target, err := filepath.EvalSymlinks(ddcPath)

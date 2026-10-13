@@ -11,28 +11,20 @@ import (
 
 const cacheName = "brightness.json"
 
-// TTL is how long a cached brightness value can be used without reading the
-// monitor again.
 const TTL = 10 * time.Second
 
-// recentWriteWindow is how long after a write a read that disagrees with it is
-// ignored.
 const recentWriteWindow = time.Second
 
-// Entry is the last known brightness of the monitor on one I2C bus.
 type Entry struct {
 	Identity  string    `json:"identity"`
 	Current   uint16    `json:"current"`
 	Maximum   uint16    `json:"maximum"`
-	UpdatedAt time.Time `json:"updated_at"` // last time the value was read or written
-	WrittenAt time.Time `json:"written_at"` // last time monlux wrote the value
+	UpdatedAt time.Time `json:"updated_at"`
+	WrittenAt time.Time `json:"written_at"`
 }
 
-// Cache holds the entries, keyed by I2C bus.
 type Cache map[int]Entry
 
-// Lookup returns the entry for the monitor with identity on bus. It returns
-// false if the bus holds a different monitor or has no usable entry.
 func Lookup(bus int, identity string) (Entry, bool) {
 	e, ok := LoadCache()[bus]
 	switch {
@@ -53,8 +45,6 @@ func Lookup(bus int, identity string) (Entry, bool) {
 	return e, true
 }
 
-// Store records a value read from (written=false) or written to (written=true)
-// the monitor with identity on bus.
 func Store(bus int, identity string, current, maximum uint16, written bool) {
 	c := LoadCache()
 	now := time.Now()
@@ -81,7 +71,6 @@ func Store(bus int, identity string, current, maximum uint16, written bool) {
 	slog.Debug("Saved brightness cache.", "bus", bus, "raw", current, "maximum", maximum, "written", written)
 }
 
-// Forget removes the entry for bus.
 func Forget(bus int) {
 	c := LoadCache()
 	delete(c, bus)
@@ -123,8 +112,6 @@ func SaveCache(c Cache) error {
 	return nil
 }
 
-// Fresh reports whether the value was read or written recently enough to use
-// without reading the monitor.
 func (e Entry) Fresh(now time.Time) bool {
 	age := now.Sub(e.UpdatedAt)
 
@@ -144,7 +131,6 @@ func (e Entry) DisagreesWithRecentWrite(raw uint16, now time.Time) bool {
 	return age >= 0 && age <= recentWriteWindow && raw != e.Current
 }
 
-// Percent returns the cached value as a percentage of the maximum.
 func (e Entry) Percent() int {
 	return int(e.Current) * 100 / int(e.Maximum)
 }

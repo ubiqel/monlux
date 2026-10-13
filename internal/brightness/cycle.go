@@ -8,17 +8,11 @@ import (
 	"github.com/ubiqel/monlux/internal/monitor"
 )
 
-// Cycle is a validated sequence of brightness percentages to move through. Use
-// NewCycle to build one.
 type Cycle struct {
 	steps   []uint
 	forward bool
 }
 
-// NewCycle checks steps and returns a Cycle. Every step must be a percentage
-// from 0 to 100, no step may be repeated, there must be at least two, and they
-// must be strictly ascending or strictly descending. The first two steps set
-// the direction.
 func NewCycle(steps []uint) (Cycle, error) {
 	if len(steps) < 2 {
 		return Cycle{}, errors.New("a cycle needs at least two steps")
@@ -45,16 +39,12 @@ func NewCycle(steps []uint) (Cycle, error) {
 	return Cycle{steps: slices.Clone(steps), forward: forward}, nil
 }
 
-// Apply moves the brightness of m to the next step after the current one.
 func (c Cycle) Apply(fd int, m monitor.Monitor, useCache bool) error {
 	return adjust(fd, m, useCache, func(curr int) int {
 		return int(c.next(uint(curr)))
 	})
 }
 
-// next returns the step after currPct in the cycle. A forward cycle moves to
-// the nearest higher step, and a backward cycle to the nearest lower one. Past
-// the end of the steps it wraps to the opposite end.
 func (c Cycle) next(currPct uint) uint {
 	if c.forward {
 		for _, step := range c.steps {

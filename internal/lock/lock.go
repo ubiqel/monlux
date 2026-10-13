@@ -47,7 +47,7 @@ func (l *Lock) Release() error {
 	}
 
 	fd := int(*l)
-	*l = -1 // Mark as released.
+	*l = -1
 
 	if err := unix.Close(fd); err != nil {
 		return fmt.Errorf("closing lock's fd: %w", err)

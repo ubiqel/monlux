@@ -75,7 +75,6 @@ func ParseIdentity(edid []byte) (identity string, ok bool) {
 		true
 }
 
-// Trim trailing spaces, newlines and NULs from a 13-byte EDID descriptor field.
 func descriptorText(raw []byte) string {
 	end := len(raw)
 	for end > 0 {

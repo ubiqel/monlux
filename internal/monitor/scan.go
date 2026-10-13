@@ -10,12 +10,10 @@ import (
 	"github.com/ubiqel/monlux/internal/i2c"
 )
 
-// Scan looks for DDC/CI monitors on the host.
 func (h Host) Scan() ScanResult {
-	// Discover DRM connectors first. Their status (when trusted) and (when
-	// available) DDC/I2C mapping tell us which buses are worth probing, so we
-	// avoid touching buses whose connectors are disconnected. Reads on those
-	// can block for hundreds of milliseconds waiting on an absent monitor.
+	// Connectors decide which buses are worth probing. Skipping buses whose
+	// connectors are disconnected matters: reads on those can block for
+	// hundreds of milliseconds waiting on an absent monitor.
 	connectors, err := h.findDRMConnectors()
 	if err != nil {
 		slog.Debug("Failed to find DRM connectors.", "error", err)
@@ -24,15 +22,13 @@ func (h Host) Scan() ScanResult {
 
 	buses := h.candidateBuses(connectors)
 	if len(buses) == 0 {
-		// Without usable DRM information, fall back to probing every bus.
 		buses = h.allI2CBuses()
 	}
 	slices.Sort(buses)
 
 	var res ScanResult
-	reportOf := make(map[int]int, len(buses)) // bus -> index in res.Buses
+	reportOf := make(map[int]int, len(buses))
 
-	// Read EDID for each candidate bus.
 	var monitors []Monitor
 	for _, bus := range buses {
 		idx := len(res.Buses)
@@ -122,15 +118,9 @@ func (h Host) Scan() ScanResult {
 	return res
 }
 
-// associateConnectors links monitors to DRM connectors. The kernel's direct
-// connector -> DDC/I2C mapping is tried first, then EDID matching for the
-// rest. It sets DRMConnector on the monitors and returns how each bus was
-// linked, keyed by bus.
 func associateConnectors(monitors []Monitor, connectors []DRMConnector) map[int]string {
 	links := make(map[int]string)
 
-	// First, associate connectors through the kernel's direct
-	// connector -> DDC/I2C mapping.
 	for i := range monitors {
 		for _, connector := range connectors {
 			if !connector.mayBeConnected() || connector.Bus == nil {
@@ -158,7 +148,6 @@ func associateConnectors(monitors []Monitor, connectors []DRMConnector) map[int]
 		}
 	}
 
-	// Connectors already linked directly can't be claimed by EDID matching.
 	claimed := make(map[string]bool)
 	for _, m := range monitors {
 		if m.DRMConnector != nil {
@@ -166,8 +155,6 @@ func associateConnectors(monitors []Monitor, connectors []DRMConnector) map[int]
 		}
 	}
 
-	// Then try EDID matching for monitors that weren't associated
-	// through the direct DDC/I2C mapping.
 	for i, monitor := range monitors {
 		if monitor.DRMConnector != nil {
 			continue
@@ -181,7 +168,7 @@ func associateConnectors(monitors []Monitor, connectors []DRMConnector) map[int]
 				continue
 			}
 
-			if len(connector.EDID) < 128 { // to avoid panic
+			if len(connector.EDID) < 128 {
 				continue
 			}
 
@@ -195,15 +182,12 @@ func associateConnectors(monitors []Monitor, connectors []DRMConnector) map[int]
 			matches++
 		}
 
-		// Exactly one EDID match is safe.
+		// Several matches are ambiguous, so the connector stays unknown.
 		if matches == 1 {
 			name := match.Name
 			monitors[i].DRMConnector = &name
 			links[monitor.I2CBus] = "edid"
 		}
-
-		// 0 matches: DRM connector remains unknown.
-		// >1 matches: ambiguous, so leave it unknown.
 	}
 
 	return links

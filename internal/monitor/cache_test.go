@@ -167,7 +167,6 @@ func TestMonitorsNoCacheIgnoresFreshCache(t *testing.T) {
 	is.Equal(monitorBuses(ScanResult{Monitors: got}), []int{4})
 	is.Equal(len(*reads), 1)
 
-	// The cache file is left as it was.
 	cached, err := readMonitorsCache()
 	is.NoErr(err)
 	is.Equal(monitorBuses(ScanResult{Monitors: cached.Monitors}), []int{9})

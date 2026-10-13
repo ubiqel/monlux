@@ -1,5 +1,3 @@
-// Package monitor finds the DDC/CI monitors attached to the machine and selects
-// one by its monitor identifier.
 package monitor
 
 import (
@@ -10,21 +8,19 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Host is everything the package reaches outside the process: the sysfs and
-// /dev trees and the DDC/CI hardware. DefaultHost describes the real machine.
-// Tests build a Host that points at a fixture tree and fakes the hardware.
+// Host gives the package every path and hardware hook it uses outside the
+// process, so tests can substitute a fixture tree and fake buses.
 type Host struct {
-	DRMPath    string // DRM connectors, usually /sys/class/drm
-	I2CSysPath string // I2C adapters, usually /sys/bus/i2c/devices
-	DevPath    string // device nodes, usually /dev
+	DRMPath    string
+	I2CSysPath string
+	DevPath    string
 
 	ReadEDID func(bus int) ([128]byte, error)
 	ProbeDDC func(bus int) bool
 
-	NoCache bool // scan every time and don't read or write the monitors cache
+	NoCache bool
 }
 
-// DefaultHost returns a Host for the real machine.
 func DefaultHost() Host {
 	return Host{
 		DRMPath:    "/sys/class/drm",
@@ -42,25 +38,23 @@ type Monitor struct {
 	DRMConnector *string   `json:"drm_connector,omitempty"`
 }
 
-// BusReport records what a scan found on one candidate I2C bus. There is one
-// per candidate bus, so a bus that isn't reported as a monitor can be explained.
+// BusReport has one entry per candidate bus, so a bus that isn't reported as a
+// monitor can still be explained.
 type BusReport struct {
 	Bus       int
-	Identity  string // EDID identity; empty if the EDID couldn't be read
-	Connector string // linked DRM connector; empty if none
-	Link      string // how Connector was linked: "ddc" or "edid"
-	Sysfs     string // sysfs EDID vs the bus EDID: "match", "mismatch", or "none"
-	Panel     bool   // the linked connector is a laptop's built-in panel
-	Probed    bool   // a DDC/CI probe was attempted
-	DDC       bool   // the bus answered DDC/CI (only meaningful when Probed)
-	Result    string // "monitor", or why the bus isn't reported as one
+	Identity  string
+	Connector string
+	Link      string
+	Sysfs     string
+	Panel     bool
+	Probed    bool
+	DDC       bool // only meaningful when Probed
+	Result    string
 }
 
-// ScanResult is the outcome of one scan.
 type ScanResult struct {
 	Monitors []Monitor
 	Buses    []BusReport
-	// Unlinked lists connected connectors that no monitor was linked to.
 	Unlinked []string
 }
 

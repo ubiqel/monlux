@@ -11,26 +11,20 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// IDType is the kind of identity a Selector matches on.
 type IDType int
 
 const (
-	IDTypeDRM  IDType = iota // DRM connector name, e.g. card1-DP-2
-	IDTypeEDID               // EDID identity
-	IDTypeI2C                // I2C bus number
+	IDTypeDRM IDType = iota
+	IDTypeEDID
+	IDTypeI2C
 )
 
-// Selector names the monitor to act on by one of its identities.
 type Selector struct {
 	Type IDType
-	// Value is the connector name, EDID identity or, for IDTypeI2C, the bus
-	// number in decimal.
+	// For IDTypeI2C, Value is the bus number in decimal.
 	Value string
 }
 
-// WithDisplay resolves sel, opens its I2C bus and runs fn with the fd and the
-// monitor. The fd is always closed. If fn fails while the display is asleep,
-// the error says so, since a sleeping display is the usual reason DDC/CI fails.
 func (h Host) WithDisplay(sel Selector, fn func(fd int, m Monitor) error) error {
 	m, err := h.Resolve(sel)
 	if err != nil {
@@ -44,6 +38,7 @@ func (h Host) WithDisplay(sel Selector, fn func(fd int, m Monitor) error) error 
 	defer unix.Close(fd)
 
 	if err := fn(fd, m); err != nil {
+		// A sleeping display is the usual reason DDC/CI fails, so say so.
 		if state, asleep := h.DPMSState(m); asleep {
 			return fmt.Errorf("display is asleep (DPMS %s): %w", state, err)
 		}
@@ -54,8 +49,6 @@ func (h Host) WithDisplay(sel Selector, fn func(fd int, m Monitor) error) error 
 	return nil
 }
 
-// DPMSState returns the DPMS state of the monitor's DRM connector (e.g. "On",
-// "Standby", "Off") and whether it's asleep. Unknown states are not asleep.
 func (h Host) DPMSState(m Monitor) (state string, asleep bool) {
 	if m.DRMConnector == nil {
 		return "", false
@@ -68,10 +61,10 @@ func (h Host) DPMSState(m Monitor) (state string, asleep bool) {
 
 	state = strings.TrimSpace(string(raw))
 
+	// An unknown (empty) state is not treated as asleep.
 	return state, state != "" && state != "On"
 }
 
-// Resolve finds the single monitor that sel names.
 func (h Host) Resolve(sel Selector) (Monitor, error) {
 	monitors := h.Monitors()
 
