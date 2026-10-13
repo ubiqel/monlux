@@ -1,70 +1,40 @@
 # AGENTS.md
 
-Linux-only Go CLI (`github.com/ubiqel/monlux`) that controls external monitor brightness over DDC/CI. Talks to `/sys/class/drm`, `/sys/bus/i2c/devices` and `/dev/i2c-N` directly.
+Linux-only Go CLI (`github.com/ubiqel/monlux`) that sets external monitor brightness over DDC/CI. It reads `/sys/class/drm`, `/sys/bus/i2c/devices` and `/dev/i2c-N` directly. User docs are in `README.md`.
 
 ## Commands
 
-Tasks are defined in `Taskfile.yml` (run with `task <name>`):
+Run `task --list` for all tasks. Needs `task`, `gotestsum`, `golangci-lint` and `gofumpt` on PATH.
 
-- `task test`: `gotestsum -- -race ./...`. Single test: `go test -race -run TestName ./internal/monitor`.
-- `task lint`: `golangci-lint run ./...` (config in `.golangci.yaml`).
-- `task format`: `gofumpt --extra -w ./`.
-- `task build.release`: writes `build/monlux`. `build/` is gitignored.
-- `task deps`: `go mod tidy` + `go mod vendor`. It needs network. `vendor/` is committed and used (`modules-download-mode: vendor`), so after any dependency change re-vendor and commit `vendor/`.
-- `go run ./cmd/monlux --debug <subcommand>` runs with debug logging and writes CPU profile and trace files to `$XDG_CACHE_HOME/monlux/debug/` (`os.UserCacheDir`).
+- `task test`: race-enabled tests. Single test: `go test -race -run TestName ./internal/monitor`.
+- `task lint`: `golangci-lint run ./...`. Config is `.golangci.yaml`.
+- `task format`: `gofumpt --extra -w ./`. CI fails on any gofumpt diff.
+- `task build.release`: writes `build/monlux`.
+- `task deps`: tidy and vendor, needs network. `vendor/` is committed and used by the build, so after a dependency change re-vendor and commit it.
+- `go run ./cmd/monlux --debug <subcommand>`: debug logs, plus CPU profile and trace in `$XDG_CACHE_HOME/monlux/debug/`.
 
-## Lint state
-
-`golangci-lint run ./...` and `gofumpt --extra -l cmd internal` are both clean. Keep them that way: fix new findings in your change rather than suppressing them.
-
-- Project-wide exclusions live in `.golangci.yaml`
-- Use an inline `//nolint:<linter> // reason` only for a single, isolated case (e.g. G103 on the ioctl call). If a pattern repeats, add a config exclusion instead.
-
-## Comments
-
-- Write a comment only when it explains *why* something is done, or documents a *gotcha* the code can't show. Don't restate what the code does, and don't describe a function's signature or parameters.
-- Package and exported-identifier doc comments are optional. Add one only when it documents a gotcha, and start it with the identifier's name.
-- Inline `//nolint:` directives and `//go:` directives stay, with their reasons.
+Keep lint and gofumpt clean, since CI enforces both. Fix findings rather than suppressing them. Project-wide exclusions go in `.golangci.yaml`. Use an inline `//nolint:<linter> // reason` only for a single isolated case.
 
 ## Layout
 
-- `cmd/monlux/`: the `package main` CLI on `urfave/cli/v3`. Only CLI wiring and output formatting live here.
-  - `main.go` wires commands, the global `--debug` flag, the lock and profiling.
-  - `flags.go` defines flags shared by several subcommands.
-  - `monitor_arg.go`: parses the `<monitor>` argument (`drm:`, `edid:`, `i2c:` prefixes) into a `monitor.Selector`, and `withDisplay`, which runs a command on the selected display.
-  - `cmd_*.go`: one file per subcommand. Each one reads its arguments and calls into `internal/`. Domain logic does not belong here, even if only one subcommand uses it.
-- `internal/monitor/`: finds monitors and selects one. Everything it touches outside the process is in `Host` (see Gotchas).
-  - `monitor.go`: `Host`, `DefaultHost()`, `Monitor`, `ScanResult`, `BusReport`, and the real EDID/DDC hooks.
-  - `discovery.go`: DRM connectors and candidate I2C buses from sysfs.
-  - `scan.go`: `Host.Scan()`, plus connector association and conflict resolution. `ScanResult` gives per-bus reasons, which `detect` prints.
-  - `cache.go`: `Host.Monitors()`, the cached monitor list.
-  - `display.go`: `Selector` (typed monitor identity), `Host.Resolve` (selector matching), `Host.WithDisplay` (open bus, run action, DPMS error wording), `Host.DPMSState`.
-- `internal/brightness/`: reads and sets brightness.
-  - `brightness.go`: `Current` (cache-aware, used by `get`), `Write`, `Read` (for `list`), `SetPercent`, `Step` (read-modify-write), and `Clamp`. The `Device` interface is what it needs from a monitor; `*ddc.Bus` implements it. Values are stored and stepped in raw monitor units. `Percent` and `Raw` convert to and from percent, rounding to nearest.
-  - `cycle.go`: `Cycle` (validated by `NewCycle`, applied with `Apply`) and its next-step rule.
-  - `cache.go`: brightness cache entries and TTL.
-- `internal/ddc/`: DDC/CI and EDID over the I2C ioctl. `Open(bus)` returns a `*Bus` for `/dev/i2c-N`, and the caller closes it.
-  - `bus.go`: the `Bus` type and the ioctl transfer. `Bus.xfer` is a seam that tests replace.
-  - `ddc.go`: DDC/CI frames, reply parsing, and the retry policy. Like ddcutil, garbled and null replies and most bus errors are retried. EIO, ENXIO, EBADF and EBUSY fail at once.
-  - `vcp.go`: brightness get/set, `ProbeDDC`, and `ErrUnsupportedFeature`.
-  - `edid.go`: `ReadEDID` (rejects a bad header or checksum, as ddcutil does) and `ParseIdentity`. `checksum.go` holds the XOR checksum.
-- `internal/cache/`: file storage under `$XDG_CACHE_HOME/monlux/` only (`Path`, `ReadJSON`, `WriteJSON`, `ErrNotExist`). It has no cache rules of its own.
-- `internal/lock/`: exclusive `flock` on `$XDG_RUNTIME_DIR/monlux.lock` (fallback `$TMPDIR/monlux-<uid>.lock`), mode 0600, taken in `main`'s `Before` hook for every invocation.
-- `internal/profile/`, `internal/log/`, `internal/version/`: debug profiling, slog handler, version string.
+- `cmd/monlux/`: CLI only (`urfave/cli/v3`). `main.go` wires commands, global flags, the lock and profiling. `cmd_*.go` has one file per subcommand. Domain logic goes in `internal/`.
+- `internal/monitor/`: finds monitors and resolves selectors. `Host` holds every external dependency (sysfs paths, EDID/DDC hooks, `OpenBus`). Production code uses `DefaultHost()`.
+- `internal/brightness/`: get, set, step and cycle over a `Device` interface, with a brightness cache.
+- `internal/ddc/`: DDC/CI frames, retries and EDID over the `/dev/i2c-N` ioctl. `Bus.xfer` is the seam tests replace.
+- `internal/cache/`: JSON files under `$XDG_CACHE_HOME/monlux/`.
+- `internal/lock/`: global flock. `internal/profile`, `internal/log` and `internal/version` are support packages.
 
 ## Gotchas
 
-- **Lock serializes everything.** Every command holds the global lock, so concurrent `monlux` calls queue. A hung I2C transaction blocks all others.
-- **Writes hit real hardware.** `set`, `up`, `down` and `cycle` change the actual monitor, even when you're only experimenting. Use `list` or `get` to inspect.
-- **Monitor IDs.** The `<monitor>` argument defaults to a DRM connector name (e.g. `card1-DP-2`). Prefixes `drm:`, `edid:`, `i2c:` select other identity types (parsed in `cmd/monlux/monitor_arg.go`, not in core). Multiple matches are an error, and you must pick one with `i2c:<bus>`.
-- **Cycle steps.** `--steps` must be strictly ascending or strictly descending, with no duplicates. The first two entries set the direction. Forward moves to the nearest higher step, and backward to the nearest lower one. Past either end, it wraps to the opposite end.
-- **Caches can return stale values.**
-  - Monitor list is cached in `$XDG_CACHE_HOME/monlux/monitors.json` for 60 s (`internal/monitor`). Scans that find no monitors aren't cached.
-  - Brightness is cached in `brightness.json` for 5 s, keyed by I2C bus and EDID identity (`internal/brightness`). `get` reads through the cache too, so external changes (monitor buttons, other tools) can show up to 5 s late.
-  - When debugging brightness or detection, add the root `--no-cache` flag (it skips both caches, and works before or after the subcommand), or delete the files under `$XDG_CACHE_HOME/monlux/`.
-- **Failures on a sleeping display.** `Host.WithDisplay` reports DPMS "asleep" when a DDC operation fails. Check the display state before debugging the I2C code.
-- **Hardware is injected through `monitor.Host`.** It holds the sysfs paths (`DRMPath`, `I2CSysPath`, `DevPath`) and the hardware hooks (`ReadEDID`, `ProbeDDC`, `OpenBus`). Production code uses `monitor.DefaultHost()`. There are no package globals to swap.
-- **Tests never touch real hardware.** `internal/monitor/fixture_test.go` (`installFixture`) builds a fake sysfs and `/dev` tree in a temp dir and returns a `Host` wired to fake buses. Keep new tests hermetic the same way. Brightness tests use a fake `brightness.Device`. ddc tests script replies through `newScriptedBus` (`internal/ddc/bus_test.go`).
-- **Cache tests isolate the cache.** Call `t.Setenv("XDG_CACHE_HOME", t.TempDir())` yourself. `installFixture` doesn't set it. `t.Setenv` panics if the test or any parent calls `t.Parallel()`, so tests that touch the cache must stay sequential (see `isolateCache` in `internal/brightness/cache_test.go`).
-- **Tests run serially by default.** Most tests finish in well under a millisecond, so `t.Parallel()` only adds noise. Add it only when a test blocks for a long time (e.g. sleeps or real I/O waits) and no shared state or `t.Setenv` is involved.
-- Tests use `github.com/matryer/is`.
+- **The lock serializes everything.** Every invocation takes the global flock, so concurrent calls queue. One hung I2C transfer blocks all of them.
+- **Writes hit real hardware.** `set`, `up`, `down` and `cycle` change the monitor. Use `list` or `get` to inspect.
+- **Monitor selectors.** `<monitor>` defaults to a DRM connector such as `card1-DP-2`. The `drm:`, `edid:` and `i2c:` prefixes select other identities, and they are parsed in `cmd/monlux/monitor_arg.go`, not in `internal/`. More than one match is an error. Pick one with `i2c:<bus>`.
+- **Caches go stale.** The monitor list is cached for 60 s in `monitors.json`. Brightness is cached for 5 s in `brightness.json`, keyed by I2C bus and EDID identity. When debugging detection or brightness, pass the root `--no-cache` flag (it works before or after the subcommand), or delete the files.
+- **Sleeping displays look like DDC failures.** `Host.WithDisplay` reports "display is asleep" when a DDC operation fails on a display in DPMS sleep. Check the DPMS state before debugging I2C code.
+- **Tests stay hermetic.** They never touch real hardware. Use `installFixture` (`internal/monitor/fixture_test.go`), `newScriptedBus` (`internal/ddc/bus_test.go`) or a fake `brightness.Device`.
+- **Cache tests need isolation.** Call `t.Setenv("XDG_CACHE_HOME", t.TempDir())` yourself, since `installFixture` doesn't. `t.Setenv` panics under `t.Parallel()`, so cache tests stay sequential.
+- Tests use `github.com/matryer/is`, not testify.
+
+## Comments
+
+Write a comment only to explain *why* something is done or to document a gotcha the code can't show. Don't restate what the code does or describe its signature. Keep existing `//nolint:` and `//go:` directives.
