@@ -1,19 +1,18 @@
 package i2c
 
-func checksumWrite(data []byte) byte { // data = on-wire bytes; dest 0x6E implied
-	cs := byte(0x6E)
+// Seeds are the implied address byte at the other end of the frame: 0x6E (the
+// monitor's write address) for host-to-monitor, 0x50 (the host) for
+// monitor-to-host.
+const (
+	seedHostToMonitor = byte(0x6E)
+	seedMonitorToHost = byte(0x50)
+)
+
+func checksum(seed byte, data []byte) byte {
+	sum := seed
 	for _, b := range data {
-		cs ^= b
+		sum ^= b
 	}
 
-	return cs
-}
-
-func checksumRead(data []byte) byte { // data = reply bytes excluding the final checksum
-	cs := byte(0x50)
-	for _, b := range data {
-		cs ^= b
-	}
-
-	return cs
+	return sum
 }

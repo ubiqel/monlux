@@ -27,7 +27,7 @@ func TestChecksumWrite(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			is := is.New(t)
-			is.Equal(checksumWrite(tt.data), tt.expected)
+			is.Equal(checksum(seedHostToMonitor, tt.data), tt.expected)
 		})
 	}
 }
@@ -58,7 +58,7 @@ func TestChecksumRead(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			is := is.New(t)
-			is.Equal(checksumRead(tt.data), tt.expected)
+			is.Equal(checksum(seedMonitorToHost, tt.data), tt.expected)
 		})
 	}
 }

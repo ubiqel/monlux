@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/ubiqel/monlux/internal/i2c"
-	"golang.org/x/sys/unix"
 )
 
 type IDType int
@@ -25,19 +24,19 @@ type Selector struct {
 	Value string
 }
 
-func (h Host) WithDisplay(sel Selector, fn func(fd int, m Monitor) error) error {
+func (h Host) WithDisplay(sel Selector, fn func(bus *i2c.Bus, m Monitor) error) error {
 	m, err := h.Resolve(sel)
 	if err != nil {
 		return err
 	}
 
-	fd, err := i2c.Open(m.I2CBus)
+	bus, err := i2c.Open(m.I2CBus)
 	if err != nil {
 		return fmt.Errorf("opening fd for bus '%v': %w", m.I2CBus, err)
 	}
-	defer unix.Close(fd)
+	defer bus.Close()
 
-	if err := fn(fd, m); err != nil {
+	if err := fn(bus, m); err != nil {
 		// A sleeping display is the usual reason DDC/CI fails, so say so.
 		if state, asleep := h.DPMSState(m); asleep {
 			return fmt.Errorf("display is asleep (DPMS %s): %w", state, err)

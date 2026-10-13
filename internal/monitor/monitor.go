@@ -5,7 +5,6 @@ import (
 	"log/slog"
 
 	"github.com/ubiqel/monlux/internal/i2c"
-	"golang.org/x/sys/unix"
 )
 
 // Host gives the package every path and hardware hook it uses outside the
@@ -58,14 +57,14 @@ type ScanResult struct {
 	Unlinked []string
 }
 
-func readEDIDFromBus(bus int) ([128]byte, error) {
-	fd, err := i2c.Open(bus)
+func readEDIDFromBus(busNum int) ([128]byte, error) {
+	bus, err := i2c.Open(busNum)
 	if err != nil {
 		return [128]byte{}, fmt.Errorf("opening bus: %w", err)
 	}
-	defer unix.Close(fd)
+	defer bus.Close()
 
-	edid, err := i2c.ReadEdid(fd)
+	edid, err := bus.ReadEDID()
 	if err != nil {
 		return [128]byte{}, fmt.Errorf("reading EDID: %w", err)
 	}
@@ -73,14 +72,14 @@ func readEDIDFromBus(bus int) ([128]byte, error) {
 	return edid, nil
 }
 
-func probeDDCOnBus(bus int) bool {
-	fd, err := i2c.Open(bus)
+func probeDDCOnBus(busNum int) bool {
+	bus, err := i2c.Open(busNum)
 	if err != nil {
-		slog.Debug("Failed to open fd for I2C bus.", "error", err, "bus", bus)
+		slog.Debug("Failed to open fd for I2C bus.", "error", err, "bus", busNum)
 
 		return false
 	}
-	defer unix.Close(fd)
+	defer bus.Close()
 
-	return i2c.ProbeDDC(fd)
+	return bus.ProbeDDC()
 }

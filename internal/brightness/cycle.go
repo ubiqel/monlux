@@ -39,9 +39,9 @@ func NewCycle(steps []uint) (Cycle, error) {
 	return Cycle{steps: slices.Clone(steps), forward: forward}, nil
 }
 
-func (c Cycle) Apply(fd int, m monitor.Monitor, useCache bool) error {
-	return adjust(fd, m, useCache, func(curr int) int {
-		return int(c.next(uint(curr)))
+func (c Cycle) Apply(dev Device, m monitor.Monitor, useCache bool) error {
+	return adjust(dev, m, useCache, func(raw, maximum uint16) uint16 {
+		return Raw(int(c.next(uint(Percent(raw, maximum)))), maximum)
 	})
 }
 

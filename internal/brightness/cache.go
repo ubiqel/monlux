@@ -110,7 +110,3 @@ func (e Entry) Fresh(now time.Time) bool {
 
 	return age >= 0 && age <= TTL
 }
-
-func (e Entry) Percent() int {
-	return int(e.Current) * 100 / int(e.Maximum)
-}
