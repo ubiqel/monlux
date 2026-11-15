@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -50,6 +51,17 @@ func cacheFileExists(t *testing.T) bool {
 	return err == nil
 }
 
+func fingerprintFor(t *testing.T, host Host) string {
+	t.Helper()
+
+	states, err := host.connectorStates()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return connectorFingerprint(states)
+}
+
 func TestWriteThenReadMonitorsCache(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
@@ -61,12 +73,13 @@ func TestWriteThenReadMonitorsCache(t *testing.T) {
 	}
 
 	before := time.Now()
-	is.NoErr(writeMonitorsCache(monitors))
+	is.NoErr(writeMonitorsCache(monitors, "fingerprint"))
 
 	got, err := readMonitorsCache()
 	is.NoErr(err)
 
 	is.True(!got.UpdatedAt.Before(before.Truncate(time.Second)))
+	is.Equal(got.ConnectorFingerprint, "fingerprint")
 	is.Equal(len(got.Monitors), 2)
 
 	first := got.Monitors[0]
@@ -113,7 +126,7 @@ func TestCacheDirIsTraversableByOwner(t *testing.T) {
 	isolateCache(t)
 	is := is.New(t)
 
-	is.NoErr(writeMonitorsCache([]Monitor{{I2CBus: 4}}))
+	is.NoErr(writeMonitorsCache([]Monitor{{I2CBus: 4}}, ""))
 
 	info, err := os.Stat(filepath.Dir(monitorsCachePath(t)))
 	is.NoErr(err)
@@ -135,14 +148,92 @@ func TestMonitorsUsesFreshCache(t *testing.T) {
 
 	// Bus 9 is not in the fixture, so getting it back proves the cache was used.
 	writeCacheFile(t, monitorsCache{
-		Monitors:  []Monitor{{I2CBus: 9, EDIDIdentity: "CACHED"}},
-		UpdatedAt: time.Now(),
+		Monitors:             []Monitor{{I2CBus: 9, EDIDIdentity: "CACHED"}},
+		ConnectorFingerprint: fingerprintFor(t, host),
+		UpdatedAt:            time.Now(),
 	})
 
 	got := host.Monitors()
 
 	is.Equal(monitorBuses(ScanResult{monitors: got}), []int{9})
 	is.Equal(len(*reads), 0)
+}
+
+func TestMonitorsRescansWhenConnectorStateChanges(t *testing.T) {
+	isolateCache(t)
+	is := is.New(t)
+
+	host, reads := installFixture(t, fixture{
+		gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}}},
+		connectors: []fxConnector{
+			{name: "card0-DP-2", gpu: 0, status: "connected", edid: makeEDID("ALPHA"), ddcBus: 4},
+		},
+		buses: map[int]fxBus{4: {edid: makeEDID("ALPHA"), ddc: true}},
+	})
+
+	writeCacheFile(t, monitorsCache{
+		Monitors:             []Monitor{{I2CBus: 9, EDIDIdentity: "CACHED"}},
+		ConnectorFingerprint: fingerprintFor(t, host),
+		UpdatedAt:            time.Now(),
+	})
+
+	// A monitor that wakes up after the cache was written changes its
+	// connector's EDID, which must invalidate the cached list.
+	mustWrite(t, filepath.Join(host.DRMPath, "card0-DP-2", "edid"), makeEDID("BETA"))
+
+	got := host.Monitors()
+	is.Equal(monitorBuses(ScanResult{monitors: got}), []int{4})
+	is.Equal(len(*reads), 1)
+
+	cached, err := readMonitorsCache()
+	is.NoErr(err)
+	is.Equal(cached.ConnectorFingerprint, fingerprintFor(t, host))
+}
+
+func TestMonitorsRescansCacheWithoutFingerprint(t *testing.T) {
+	isolateCache(t)
+	is := is.New(t)
+
+	host, reads := installFixture(t, fixture{
+		gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}}},
+		connectors: []fxConnector{
+			{name: "card0-DP-2", gpu: 0, status: "connected", edid: makeEDID("ALPHA"), ddcBus: 4},
+		},
+		buses: map[int]fxBus{4: {edid: makeEDID("ALPHA"), ddc: true}},
+	})
+
+	// A cache from an older monlux has no fingerprint and can't be trusted.
+	writeCacheFile(t, monitorsCache{
+		Monitors:  []Monitor{{I2CBus: 9, EDIDIdentity: "CACHED"}},
+		UpdatedAt: time.Now(),
+	})
+
+	got := host.Monitors()
+	is.Equal(monitorBuses(ScanResult{monitors: got}), []int{4})
+	is.Equal(len(*reads), 1)
+}
+
+func TestConnectorFingerprint(t *testing.T) {
+	is := is.New(t)
+
+	base := []connectorState{
+		{name: "card0-DP-1", status: "connected", edid: makeEDID("ALPHA")},
+		{name: "card0-HDMI-A-1", status: "disconnected"},
+	}
+
+	fingerprint := connectorFingerprint(base)
+	is.Equal(fingerprint, connectorFingerprint(base))
+
+	changedStatus := slices.Clone(base)
+	changedStatus[0].status = "disconnected"
+	is.True(fingerprint != connectorFingerprint(changedStatus))
+
+	changedEDID := slices.Clone(base)
+	changedEDID[0].edid = makeEDID("BETA")
+	is.True(fingerprint != connectorFingerprint(changedEDID))
+
+	added := append(slices.Clone(base), connectorState{name: "card0-DP-2", status: "connected", edid: makeEDID("GAMMA")})
+	is.True(fingerprint != connectorFingerprint(added))
 }
 
 func TestMonitorsNoCacheIgnoresFreshCache(t *testing.T) {

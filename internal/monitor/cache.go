@@ -14,17 +14,29 @@ const monitorsCacheName = "monitors.json"
 const monitorsCacheTTL = 60 * time.Second
 
 type monitorsCache struct {
-	Monitors  []Monitor `json:"monitors"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Monitors             []Monitor `json:"monitors"`
+	ConnectorFingerprint string    `json:"connector_fingerprint"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
-// Monitors returns the host's monitors, from the cache when it is fresh. Scans
-// that find nothing aren't cached, so a monitor plugged in later is still found.
+// Monitors returns the host's monitors, from the cache when it is fresh and
+// the DRM connectors still match the cached state. Scans that find nothing
+// aren't cached, so a monitor plugged in later is still found.
 func (h Host) Monitors() []Monitor {
 	if h.NoCache {
 		slog.Debug("Monitors cache disabled, scanning.")
 
 		return h.Scan().monitors
+	}
+
+	states, stateErr := h.connectorStates()
+	if stateErr != nil {
+		slog.Debug("Failed to read DRM connector state, skipping cache validation.", "error", stateErr)
+	}
+
+	fingerprint := ""
+	if stateErr == nil {
+		fingerprint = connectorFingerprint(states)
 	}
 
 	cached, err := readMonitorsCache()
@@ -36,6 +48,11 @@ func (h Host) Monitors() []Monitor {
 			slog.Debug("Monitors cache timestamp is in the future, scanning.", "age", age)
 		case age > monitorsCacheTTL:
 			slog.Debug("Monitors cache expired, scanning.", "age", age, "ttl", monitorsCacheTTL)
+		case stateErr != nil:
+			slog.Debug("Could not read DRM connector state, scanning instead.")
+		case cached.ConnectorFingerprint != fingerprint:
+			slog.Debug("DRM connector state changed since the cache was written, scanning.",
+				"cached", cached.ConnectorFingerprint, "current", fingerprint)
 		default:
 			slog.Debug("Monitors cache hit.", "age", age, "monitors", len(cached.Monitors))
 
@@ -47,14 +64,14 @@ func (h Host) Monitors() []Monitor {
 		slog.Warn("Failed to read monitors cache, scanning instead.", "error", err)
 	}
 
-	monitors := h.Scan().monitors
+	monitors := h.scan(h.enrichConnectors(states)).monitors
 	if len(monitors) == 0 {
 		slog.Debug("Scan found no monitors, not caching the result.")
 
 		return monitors
 	}
 
-	if err := writeMonitorsCache(monitors); err != nil {
+	if err := writeMonitorsCache(monitors, fingerprint); err != nil {
 		slog.Warn("Failed to save monitors cache.", "error", err)
 	} else {
 		slog.Debug("Saved monitors cache.", "monitors", len(monitors))
@@ -72,10 +89,11 @@ func readMonitorsCache() (monitorsCache, error) {
 	return c, nil
 }
 
-func writeMonitorsCache(monitors []Monitor) error {
+func writeMonitorsCache(monitors []Monitor, fingerprint string) error {
 	err := cache.WriteJSON(monitorsCacheName, monitorsCache{
-		Monitors:  monitors,
-		UpdatedAt: time.Now(),
+		Monitors:             monitors,
+		ConnectorFingerprint: fingerprint,
+		UpdatedAt:            time.Now(),
 	})
 	if err != nil {
 		return fmt.Errorf("writing monitors cache: %w", err)

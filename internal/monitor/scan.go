@@ -11,15 +11,19 @@ import (
 )
 
 func (h Host) Scan() ScanResult {
-	// Connectors decide which buses are worth probing. Skipping buses whose
-	// connectors are disconnected matters: reads on those can block for
-	// hundreds of milliseconds waiting on an absent monitor.
 	connectors, err := h.findDRMConnectors()
 	if err != nil {
 		slog.Debug("Failed to find DRM connectors.", "error", err)
 		connectors = nil
 	}
 
+	return h.scan(connectors)
+}
+
+func (h Host) scan(connectors []drmConnector) ScanResult {
+	// Connectors decide which buses are worth probing. Skipping buses whose
+	// connectors are disconnected matters: reads on those can block for
+	// hundreds of milliseconds waiting on an absent monitor.
 	buses := h.candidateBuses(connectors)
 	if len(buses) == 0 {
 		buses = h.allI2CBuses()

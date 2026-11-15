@@ -134,7 +134,7 @@ Common errors:
 
 To avoid slow DDC/CI round trips, `monlux` caches results under `$XDG_CACHE_HOME/monlux/`:
 
-- The monitor list is cached for 60 seconds.
+- The monitor list is cached for 60 seconds. It is discarded when the DRM connector state (presence, link status or EDID) changes, so a monitor that powers on after boot is found on the next call.
 - Brightness is cached for 5 seconds, per I2C bus and monitor identity. `get` reads from the cache too, so a brightness change made outside `monlux` (for example with the monitor's buttons) can show up to 5 seconds late.
 
 Pass `--no-cache` to any command to skip both caches: it scans for monitors and reads and writes brightness directly, without saving anything. Or delete the files in that directory.

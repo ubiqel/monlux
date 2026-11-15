@@ -1,6 +1,8 @@
 package monitor
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
@@ -141,13 +143,22 @@ func (h Host) isSMBusAdapter(bus int) bool {
 	return strings.Contains(strings.ToLower(string(name)), "smbus")
 }
 
-func (h Host) findDRMConnectors() ([]drmConnector, error) {
+// connectorState is the part of a DRM connector that decides whether a cached
+// monitor list is still valid. Reading it needs no I2C, so it is cheap enough
+// to check on every cache hit.
+type connectorState struct {
+	name   string
+	status string
+	edid   []byte
+}
+
+func (h Host) connectorStates() ([]connectorState, error) {
 	entries, err := os.ReadDir(h.DRMPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading DRM path: %w", err)
 	}
 
-	connectors := make([]drmConnector, 0)
+	states := make([]connectorState, 0, len(entries))
 	for _, entry := range entries {
 		name := entry.Name()
 
@@ -164,15 +175,43 @@ func (h Host) findDRMConnectors() ([]drmConnector, error) {
 			continue
 		}
 
-		connector := drmConnector{
-			name:      name,
-			connected: strings.TrimSpace(string(status)) == "connected",
-			// NVIDIA's proprietary driver sometimes reports "disconnected",
-			// so its status is ignored.
-			statusReliable: h.connectorDriver(name) != "nvidia",
+		state := connectorState{name: name, status: strings.TrimSpace(string(status))}
+
+		if edid, err := os.ReadFile(filepath.Join(connectorPath, "edid")); err == nil && len(edid) > 0 {
+			state.edid = edid
 		}
 
-		ddcPath := filepath.Join(connectorPath, "ddc")
+		states = append(states, state)
+	}
+
+	return states, nil
+}
+
+func (h Host) findDRMConnectors() ([]drmConnector, error) {
+	states, err := h.connectorStates()
+	if err != nil {
+		return nil, err
+	}
+
+	return h.enrichConnectors(states), nil
+}
+
+func (h Host) enrichConnectors(states []connectorState) []drmConnector {
+	connectors := make([]drmConnector, 0, len(states))
+
+	for _, state := range states {
+		connector := drmConnector{
+			name:      state.name,
+			connected: state.status == "connected",
+			// NVIDIA's proprietary driver sometimes reports "disconnected",
+			// so its status is ignored.
+			statusReliable: h.connectorDriver(state.name) != "nvidia",
+			// Without a direct I2C mapping the connector is kept anyway, since
+			// its EDID may allow us to associate it with a monitor later.
+			edid: state.edid,
+		}
+
+		ddcPath := filepath.Join(h.DRMPath, state.name, "ddc")
 
 		target, err := filepath.EvalSymlinks(ddcPath)
 		if err == nil {
@@ -183,17 +222,29 @@ func (h Host) findDRMConnectors() ([]drmConnector, error) {
 			}
 		}
 
-		// If there is no direct I2C mapping, keep the connector anyway.
-		// Its EDID may allow us to associate it with an I2C monitor later.
-		edid, err := os.ReadFile(filepath.Join(connectorPath, "edid"))
-		if err == nil && len(edid) > 0 {
-			connector.edid = edid
-		}
-
 		connectors = append(connectors, connector)
 	}
 
-	return connectors, nil
+	return connectors
+}
+
+// connectorFingerprint identifies the DRM state a monitor list was scanned
+// from. It changes when a monitor powers on, is replugged or is swapped, so a
+// cache written before that is not trusted afterwards.
+func connectorFingerprint(states []connectorState) string {
+	hash := sha256.New()
+
+	for _, state := range states {
+		// hash.Hash.Write never returns an error.
+		_, _ = hash.Write([]byte(state.name))
+		_, _ = hash.Write([]byte{0})
+		_, _ = hash.Write([]byte(state.status))
+		_, _ = hash.Write([]byte{0})
+		_, _ = hash.Write(state.edid)
+		_, _ = hash.Write([]byte{0})
+	}
+
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 func busFromPath(path string) (int, bool) {
