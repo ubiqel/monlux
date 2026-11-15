@@ -86,11 +86,41 @@ func TestScanFixtures(t *testing.T) {
 			},
 			check: func(is *is.I, res ScanResult, _ []int) {
 				is.Equal(len(res.monitors), 0)
+				is.Equal(res.missing, []string{"card0-DP-2"})
 
 				r := reportFor(is, res, 4)
 				is.True(r.Probed)
 				is.Equal(r.DDC, false)
 				is.Equal(r.Result, "EDID only, DDC/CI not answering")
+			},
+		},
+		{
+			name: "connected monitor without a readable bus EDID is missing",
+			fx: fixture{
+				gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}}},
+				connectors: []fxConnector{
+					{name: "card0-DP-2", gpu: 0, status: "connected", edid: edidA, ddcBus: 4},
+				},
+				buses: map[int]fxBus{4: {}},
+			},
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(len(res.monitors), 0)
+				is.Equal(res.missing, []string{"card0-DP-2"})
+			},
+		},
+		{
+			name: "connected connector without EDID is not missing",
+			fx: fixture{
+				gpus: []fxGPU{{pci: "0000:03:00.0", driver: "amdgpu", card: "card0", buses: []int{4}}},
+				connectors: []fxConnector{
+					{name: "card0-DP-2", gpu: 0, status: "connected", edid: edidA, ddcBus: 4},
+					{name: "card0-Unknown-1", gpu: 0, status: "connected", ddcBus: -1},
+				},
+				buses: map[int]fxBus{4: {edid: edidA, ddc: true}},
+			},
+			check: func(is *is.I, res ScanResult, _ []int) {
+				is.Equal(monitorBuses(res), []int{4})
+				is.Equal(len(res.missing), 0)
 			},
 		},
 		{
@@ -104,6 +134,7 @@ func TestScanFixtures(t *testing.T) {
 			},
 			check: func(is *is.I, res ScanResult, _ []int) {
 				is.Equal(len(res.monitors), 0)
+				is.Equal(len(res.missing), 0)
 
 				r := reportFor(is, res, 4)
 				is.True(r.Panel)
@@ -128,6 +159,7 @@ func TestScanFixtures(t *testing.T) {
 
 				m := res.monitors[0]
 				is.True(m.DRMConnector != nil && *m.DRMConnector == "card1-DP-2")
+				is.Equal(len(res.missing), 0)
 			},
 		},
 		{
@@ -151,6 +183,7 @@ func TestScanFixtures(t *testing.T) {
 				}
 
 				is.Equal(len(res.Unlinked), 2)
+				is.Equal(len(res.missing), 0)
 			},
 		},
 		{
@@ -169,6 +202,7 @@ func TestScanFixtures(t *testing.T) {
 				is.Equal(r.Connector, "")
 				is.Equal(r.Sysfs, "mismatch")
 				is.Equal(res.Unlinked, []string{"card0-DP-2"})
+				is.Equal(len(res.missing), 0)
 			},
 		},
 		{

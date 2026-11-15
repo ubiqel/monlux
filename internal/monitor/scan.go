@@ -116,6 +116,11 @@ func (h Host) scan(connectors []drmConnector) ScanResult {
 		slog.Debug("Connector has no DDC-capable monitor linked to it.", "connector", name)
 	}
 
+	res.missing = missingMonitors(connectors, monitors, kept)
+	for _, name := range res.missing {
+		slog.Debug("Connected connector has an EDID but no monitor in the scan.", "connector", name)
+	}
+
 	warnDuplicateIdentities(kept)
 	res.monitors = kept
 
@@ -235,6 +240,58 @@ func unlinkedConnectors(monitors []Monitor, connectors []drmConnector) []string 
 	}
 
 	return names
+}
+
+// missingMonitors returns connected connectors with an EDID that no monitor in
+// the scan represents. That happens when a display is still waking up or its
+// DDC/CI is temporarily unavailable, so the result must not be cached for the
+// full TTL. scanned holds every bus that answered EDID, before the DDC/CI
+// filter, so a stale sysfs EDID can be told apart from a missing monitor.
+func missingMonitors(connectors []drmConnector, scanned, monitors []Monitor) []string {
+	byBus := make(map[int]Monitor, len(scanned))
+	for _, m := range scanned {
+		byBus[m.I2CBus] = m
+	}
+
+	var missing []string
+
+	for _, c := range connectors {
+		if !c.mayBeConnected() || isInternalPanel(c.name) || len(c.edid) < 128 {
+			continue
+		}
+
+		if monitorCoversConnector(monitors, c) {
+			continue
+		}
+
+		// When the connector's own bus reports a different EDID, sysfs still
+		// holds a stale EDID from an old monitor, so nothing is missing.
+		if c.bus != nil {
+			if m, ok := byBus[*c.bus]; ok && !bytes.Equal(m.EDIDRaw[:], c.edid[:128]) {
+				continue
+			}
+		}
+
+		missing = append(missing, c.name)
+	}
+
+	slices.Sort(missing)
+
+	return missing
+}
+
+func monitorCoversConnector(monitors []Monitor, c drmConnector) bool {
+	for _, m := range monitors {
+		if m.DRMConnector != nil && *m.DRMConnector == c.name {
+			return true
+		}
+
+		if bytes.Equal(m.EDIDRaw[:], c.edid[:128]) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // warnDuplicateIdentities warns about monitors that share an identity. Such
