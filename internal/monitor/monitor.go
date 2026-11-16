@@ -72,6 +72,9 @@ type BusReport struct {
 
 type ScanResult struct {
 	monitors []Monitor
+	// missing lists connected connectors that have an EDID but no monitor in
+	// the scan, such as a display whose DDC/CI is not answering yet.
+	missing  []string
 	Buses    []BusReport
 	Unlinked []string
 }
