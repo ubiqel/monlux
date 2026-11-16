@@ -27,7 +27,7 @@ type monitorsCache struct {
 	Monitors             []Monitor `json:"monitors"`
 	ConnectorFingerprint string    `json:"connector_fingerprint"`
 	Missing              []string  `json:"missing,omitempty"`
-	PartialSince         time.Time `json:"partial_since"`
+	PartialSince         time.Time `json:"partial_since,omitzero"`
 	UpdatedAt            time.Time `json:"updated_at"`
 }
 

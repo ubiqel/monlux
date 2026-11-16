@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,6 +97,10 @@ func TestWriteThenReadMonitorsCache(t *testing.T) {
 
 	before := time.Now()
 	is.NoErr(writeMonitorsCache(monitors, "fingerprint", nil, time.Time{}))
+
+	content, err := os.ReadFile(monitorsCachePath(t))
+	is.NoErr(err)
+	is.True(!strings.Contains(string(content), "partial_since"))
 
 	got, err := readMonitorsCache()
 	is.NoErr(err)
@@ -284,6 +289,10 @@ func TestMonitorsWritesPartialState(t *testing.T) {
 	is.NoErr(err)
 	is.Equal(cached.Missing, []string{"card0-DP-3"})
 	is.True(!cached.PartialSince.IsZero())
+
+	content, err := os.ReadFile(monitorsCachePath(t))
+	is.NoErr(err)
+	is.True(strings.Contains(string(content), `"partial_since"`))
 }
 
 func TestMonitorsPartialCacheTTL(t *testing.T) {
